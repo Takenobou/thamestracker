@@ -1,0 +1,9 @@
+[server]
+port = 3000
+
+[urls]
+port_of_london = "https://www.pla.co.uk/ships-in-port"
+tower_bridge = "https://www.towerbridge.org.uk/lift-times"
+
+[redis]
+address = "localhost:6379"

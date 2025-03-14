@@ -5,6 +5,8 @@ import (
 	"log"
 	"strings"
 
+	"github.com/Takenobou/thamestracker/config"
+
 	"github.com/gocolly/colly"
 )
 
@@ -18,7 +20,7 @@ type BridgeLift struct {
 
 // ScrapeBridgeLifts fetches upcoming bridge lift times from all pages
 func ScrapeBridgeLifts() ([]BridgeLift, error) {
-	baseURL := "https://www.towerbridge.org.uk/lift-times"
+	baseURL := config.AppConfig.URLs.TowerBridge
 	c := colly.NewCollector()
 	var lifts []BridgeLift
 
@@ -59,7 +61,7 @@ func ScrapeBridgeLifts() ([]BridgeLift, error) {
 		return nil, err
 	}
 
-	c.Wait() // Ensure all pages finish processing
+	c.Wait()
 
 	return lifts, nil
 }
