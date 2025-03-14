@@ -1,7 +1,9 @@
 package scraper
 
 import (
+	"fmt"
 	"log"
+	"strings"
 
 	"github.com/gocolly/colly"
 )
@@ -14,20 +16,22 @@ type BridgeLift struct {
 	Direction string `json:"direction"`
 }
 
-// ScrapeBridgeLifts fetches upcoming bridge lift times
+// ScrapeBridgeLifts fetches upcoming bridge lift times from all pages
 func ScrapeBridgeLifts() ([]BridgeLift, error) {
+	baseURL := "https://www.towerbridge.org.uk/lift-times"
 	c := colly.NewCollector()
 	var lifts []BridgeLift
 
+	// Scrape lift data from the page
 	c.OnHTML("tbody tr", func(e *colly.HTMLElement) {
 		lift := BridgeLift{
-			Date:      e.ChildAttr("td:nth-child(2) time", "datetime"), // Extract datetime attribute for accuracy
-			Time:      e.ChildAttr("td:nth-child(3) time", "datetime"), // Extract time in ISO format
-			Vessel:    e.ChildText("td:nth-child(4)"),                  // Vessel name is plain text
-			Direction: e.ChildText("td:nth-child(5)"),                  // Direction is plain text
+			Date:      e.ChildAttr("td:nth-child(2) time", "datetime"),
+			Time:      e.ChildAttr("td:nth-child(3) time", "datetime"),
+			Vessel:    strings.TrimSpace(e.ChildText("td:nth-child(4)")),
+			Direction: strings.TrimSpace(e.ChildText("td:nth-child(5)")),
 		}
 
-		// Convert ISO 8601 datetime to human-readable format if needed
+		// Format datetime to human-readable format
 		if lift.Date != "" {
 			lift.Date = lift.Date[:10] // Keep only YYYY-MM-DD part
 		}
@@ -38,11 +42,24 @@ func ScrapeBridgeLifts() ([]BridgeLift, error) {
 		lifts = append(lifts, lift)
 	})
 
-	err := c.Visit("https://www.towerbridge.org.uk/lift-times")
+	// Find and follow pagination links
+	c.OnHTML("nav.pager a[title='Current page']", func(e *colly.HTMLElement) {
+		nextPage := e.DOM.Parent().Next().Find("a").AttrOr("href", "")
+		if nextPage != "" {
+			nextURL := fmt.Sprintf("%s%s", baseURL, nextPage)
+			log.Println("Scraping next page:", nextURL)
+			c.Visit(nextURL) // Recursively visit the next page
+		}
+	})
+
+	// Start scraping from the first page
+	err := c.Visit(baseURL)
 	if err != nil {
 		log.Println("Error scraping Tower Bridge lifts:", err)
 		return nil, err
 	}
+
+	c.Wait() // Ensure all pages finish processing
 
 	return lifts, nil
 }
