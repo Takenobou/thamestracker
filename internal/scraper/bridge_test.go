@@ -10,7 +10,7 @@ import (
 )
 
 // Mock HTML similar to the Tower Bridge site
-const sampleHTML = `
+const sampleBridgeHTML = `
 <html>
 	<body>
 		<table>
@@ -26,7 +26,7 @@ const sampleHTML = `
 func TestScrapeBridgeLifts(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(sampleHTML))
+		w.Write([]byte(sampleBridgeHTML))
 	}))
 	defer server.Close()
 

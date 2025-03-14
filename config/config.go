@@ -27,4 +27,6 @@ func LoadConfig() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 	log.Println("Configuration loaded successfully ✅")
+	log.Printf("Port of London API URL: %s", AppConfig.URLs.PortOfLondon)
+	log.Printf("Tower Bridge URL: %s", AppConfig.URLs.TowerBridge)
 }
