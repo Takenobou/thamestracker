@@ -12,7 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// GetBridgeLifts - Returns all scheduled bridge lifts
+// GetBridgeLifts - Returns all scheduled bridge lifts or unique (rare) ones
 func GetBridgeLifts(c *fiber.Ctx) error {
 	var lifts []models.BridgeLift
 
@@ -20,52 +20,40 @@ func GetBridgeLifts(c *fiber.Ctx) error {
 	err := storage.GetCache("bridge_lifts", &lifts)
 	if err == nil {
 		log.Println("Returning cached bridge lifts ✅")
-		return c.JSON(lifts)
-	}
-
-	log.Println("Cache miss ❌, scraping fresh bridge lift data...")
-	lifts, err = bridgeScraper.ScrapeBridgeLifts()
-	if err != nil {
-		log.Println("Error fetching bridge lifts:", err)
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve bridge lift data"})
-	}
-
-	storage.SetCache("bridge_lifts", lifts, 15*time.Minute)
-	return c.JSON(lifts)
-}
-
-// GetRareLifts - Returns only vessels that appear infrequently
-func GetRareLifts(c *fiber.Ctx) error {
-	var lifts []models.BridgeLift
-
-	// Try cache first
-	err := storage.GetCache("bridge_lifts", &lifts)
-	if err != nil {
-		log.Println("Cache miss ❌, scraping fresh data...")
+	} else {
+		log.Println("Cache miss ❌, scraping fresh bridge lift data...")
 		lifts, err = bridgeScraper.ScrapeBridgeLifts()
 		if err != nil {
 			log.Println("Error fetching bridge lifts:", err)
-			return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve data"})
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve bridge lift data"})
 		}
-		// Store in cache
 		storage.SetCache("bridge_lifts", lifts, 15*time.Minute)
 	}
 
-	// Count occurrences of each vessel
+	// Check if ?unique=true is passed
+	unique := c.Query("unique", "false")
+	if unique == "true" {
+		lifts = FilterUniqueLifts(lifts)
+	}
+
+	return c.JSON(lifts)
+}
+
+// FilterUniqueLifts - Filters out common lifts and returns only unique ones
+func FilterUniqueLifts(lifts []models.BridgeLift) []models.BridgeLift {
 	vesselCount := make(map[string]int)
 	for _, lift := range lifts {
 		vesselCount[lift.Vessel]++
 	}
 
-	// Filter rare vessels (e.g., appears ≤ 2 times)
-	var rareLifts []models.BridgeLift
+	var uniqueLifts []models.BridgeLift
 	for _, lift := range lifts {
-		if vesselCount[lift.Vessel] <= 2 {
-			rareLifts = append(rareLifts, lift)
+		if vesselCount[lift.Vessel] <= 2 { // Adjust the threshold if needed
+			uniqueLifts = append(uniqueLifts, lift)
 		}
 	}
 
-	return c.JSON(rareLifts)
+	return uniqueLifts
 }
 
 // FilterShips applies query parameters to filter the ship list
