@@ -55,58 +55,67 @@ func ScrapeShips(shipType string) ([]models.Ship, error) {
 		return nil, err
 	}
 
-	// Select the correct list based on shipType
-	var shipList []shipData
-	switch shipType {
-	case "inport":
-		shipList = result.InPort
-	case "arrivals":
-		shipList = result.Arrivals
-	case "departures":
-		shipList = result.Departures
-	case "forecast":
-		shipList = result.Forecast
-	default:
-		return nil, fmt.Errorf("invalid shipType: %s", shipType)
+	var ships []models.Ship
+
+	// Helper function to process ship data from a given category.
+	processShips := func(shipList []shipData, category string) {
+		for _, item := range shipList {
+			var timestamp string
+			switch category {
+			case "departures":
+				timestamp = item.FirstRepDT
+			case "forecast":
+				timestamp = item.ETADate
+			default:
+				timestamp = item.LastRepDT
+			}
+
+			if timestamp == "" {
+				log.Printf("⚠️ Missing timestamp for %s, skipping entry", item.VesselName)
+				continue
+			}
+
+			parsedTime, err := time.Parse("2006-01-02 15:04:05.000", timestamp)
+			if err != nil {
+				log.Printf("❌ Error parsing time for %s (%s): %v", item.VesselName, timestamp, err)
+				continue
+			}
+
+			ships = append(ships, models.Ship{
+				Time:         parsedTime.Format("15:04"),      // HH:MM format
+				Date:         parsedTime.Format("02/01/2006"), // DD/MM/YYYY format
+				LocationFrom: item.LocationFrom,
+				LocationTo:   item.LocationTo,
+				LocationName: item.LocationName,
+				Name:         item.VesselName,
+				Nationality:  item.Nationality,
+				VoyageNo:     item.Visit,
+				Type:         category, // Set the type based on the category processed
+			})
+		}
 	}
 
-	// Convert API response to models.Ship
-	var ships []models.Ship
-	for _, item := range shipList {
-		// Extract the correct timestamp based on shipType
-		var timestamp string
+	// Handle "all" by processing each category
+	if shipType == "all" {
+		processShips(result.InPort, "inport")
+		processShips(result.Arrivals, "arrivals")
+		processShips(result.Departures, "departures")
+		processShips(result.Forecast, "forecast")
+	} else {
+		var shipList []shipData
 		switch shipType {
+		case "inport":
+			shipList = result.InPort
+		case "arrivals":
+			shipList = result.Arrivals
 		case "departures":
-			timestamp = item.FirstRepDT
+			shipList = result.Departures
 		case "forecast":
-			timestamp = item.ETADate
+			shipList = result.Forecast
 		default:
-			timestamp = item.LastRepDT
+			return nil, fmt.Errorf("invalid shipType: %s", shipType)
 		}
-
-		if timestamp == "" {
-			log.Printf("⚠️ Missing timestamp for %s, skipping entry", item.VesselName)
-			continue
-		}
-
-		// Parse timestamp
-		parsedTime, err := time.Parse("2006-01-02 15:04:05.000", timestamp)
-		if err != nil {
-			log.Printf("❌ Error parsing time for %s (%s): %v", item.VesselName, timestamp, err)
-			continue
-		}
-
-		ships = append(ships, models.Ship{
-			Time:         parsedTime.Format("15:04"),      // HH:MM format
-			Date:         parsedTime.Format("02/01/2006"), // DD/MM/YYYY format
-			LocationFrom: item.LocationFrom,
-			LocationTo:   item.LocationTo,
-			LocationName: item.LocationName,
-			Name:         item.VesselName,
-			Nationality:  item.Nationality,
-			VoyageNo:     item.Visit,
-			Type:         shipType,
-		})
+		processShips(shipList, shipType)
 	}
 
 	log.Printf("✅ Retrieved %d %s from API\n", len(ships), shipType)

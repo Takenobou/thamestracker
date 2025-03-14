@@ -62,61 +62,116 @@ func TestScrapeShips(t *testing.T) {
 	config.AppConfig.URLs.PortOfLondon = server.URL
 	defer func() { config.AppConfig.URLs.PortOfLondon = originalURL }() // Restore after test
 
-	// Define test cases for different ship types
+	// Define test cases for different ship types including "all"
 	tests := []struct {
-		name     string
-		shipType string
-		expected models.Ship
+		name          string
+		shipType      string
+		expectedLen   int
+		expectedShips []models.Ship
 	}{
 		{
-			name:     "Inport",
-			shipType: "inport",
-			expected: models.Ship{
-				Time:         "20:33",
-				Date:         "25/01/2025",
-				LocationName: "WOODS QUAY",
-				Name:         "SILVER STURGEON",
-				VoyageNo:     "S7670",
-				Type:         "inport",
+			name:        "Inport",
+			shipType:    "inport",
+			expectedLen: 1,
+			expectedShips: []models.Ship{
+				{
+					Time:         "20:33",
+					Date:         "25/01/2025",
+					LocationName: "WOODS QUAY",
+					Name:         "SILVER STURGEON",
+					VoyageNo:     "S7670",
+					Type:         "inport",
+				},
 			},
 		},
 		{
-			name:     "Arrivals",
-			shipType: "arrivals",
-			expected: models.Ship{
-				Time:         "14:22",
-				Date:         "13/03/2025",
-				LocationFrom: "MAPTM",
-				LocationTo:   "LONDON GATEWAY1",
-				Name:         "SAN NICOLAS MAERSK",
-				VoyageNo:     "S7795",
-				Type:         "arrivals",
+			name:        "Arrivals",
+			shipType:    "arrivals",
+			expectedLen: 1,
+			expectedShips: []models.Ship{
+				{
+					Time:         "14:22",
+					Date:         "13/03/2025",
+					LocationFrom: "MAPTM",
+					LocationTo:   "LONDON GATEWAY1",
+					Name:         "SAN NICOLAS MAERSK",
+					VoyageNo:     "S7795",
+					Type:         "arrivals",
+				},
 			},
 		},
 		{
-			name:     "Departures",
-			shipType: "departures",
-			expected: models.Ship{
-				Time:         "15:39",
-				Date:         "13/03/2025",
-				LocationFrom: "TILBURY DOCK",
-				LocationTo:   "SESOE",
-				Name:         "FRISIAN SPRING",
-				VoyageNo:     "F1785",
-				Type:         "departures",
+			name:        "Departures",
+			shipType:    "departures",
+			expectedLen: 1,
+			expectedShips: []models.Ship{
+				{
+					Time:         "15:39",
+					Date:         "13/03/2025",
+					LocationFrom: "TILBURY DOCK",
+					LocationTo:   "SESOE",
+					Name:         "FRISIAN SPRING",
+					VoyageNo:     "F1785",
+					Type:         "departures",
+				},
 			},
 		},
 		{
-			name:     "Forecast",
-			shipType: "forecast",
-			expected: models.Ship{
-				Time:         "14:15",
-				Date:         "14/03/2025",
-				LocationFrom: "NLVLI",
-				LocationTo:   "FORDS JETTY",
-				Name:         "ADELINE",
-				VoyageNo:     "A9999",
-				Type:         "forecast",
+			name:        "Forecast",
+			shipType:    "forecast",
+			expectedLen: 1,
+			expectedShips: []models.Ship{
+				{
+					Time:         "14:15",
+					Date:         "14/03/2025",
+					LocationFrom: "NLVLI",
+					LocationTo:   "FORDS JETTY",
+					Name:         "ADELINE",
+					VoyageNo:     "A9999",
+					Type:         "forecast",
+				},
+			},
+		},
+		{
+			name:        "All",
+			shipType:    "all",
+			expectedLen: 4,
+			expectedShips: []models.Ship{
+				{
+					Time:         "20:33",
+					Date:         "25/01/2025",
+					LocationName: "WOODS QUAY",
+					Name:         "SILVER STURGEON",
+					VoyageNo:     "S7670",
+					Type:         "inport",
+				},
+				{
+					Time:         "14:22",
+					Date:         "13/03/2025",
+					LocationFrom: "MAPTM",
+					LocationTo:   "LONDON GATEWAY1",
+					Name:         "SAN NICOLAS MAERSK",
+					VoyageNo:     "S7795",
+					Type:         "arrivals",
+				},
+				{
+					Time:         "15:39",
+					Date:         "13/03/2025",
+					LocationFrom: "TILBURY DOCK",
+					LocationTo:   "SESOE",
+					Name:         "FRISIAN SPRING",
+					VoyageNo:     "F1785",
+					Type:         "departures",
+				},
+				{
+					Time:         "14:15",
+					Date:         "14/03/2025",
+					LocationFrom: "NLVLI",
+					LocationTo:   "FORDS JETTY",
+					Name:         "ADELINE",
+					VoyageNo:     "A9999",
+					Type:         "forecast",
+				},
 			},
 		},
 	}
@@ -126,17 +181,19 @@ func TestScrapeShips(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ships, err := ScrapeShips(tc.shipType)
 			assert.NoError(t, err)
-			assert.Len(t, ships, 1)
+			assert.Len(t, ships, tc.expectedLen, "unexpected number of ships for type %s", tc.shipType)
 
-			// Validate each field
-			assert.Equal(t, tc.expected.Time, ships[0].Time, "Time mismatch")
-			assert.Equal(t, tc.expected.Date, ships[0].Date, "Date mismatch")
-			assert.Equal(t, tc.expected.LocationFrom, ships[0].LocationFrom, "LocationFrom mismatch")
-			assert.Equal(t, tc.expected.LocationTo, ships[0].LocationTo, "LocationTo mismatch")
-			assert.Equal(t, tc.expected.LocationName, ships[0].LocationName, "LocationName mismatch")
-			assert.Equal(t, tc.expected.Name, ships[0].Name, "Name mismatch")
-			assert.Equal(t, tc.expected.VoyageNo, ships[0].VoyageNo, "VoyageNo mismatch")
-			assert.Equal(t, tc.expected.Type, ships[0].Type, "Type mismatch")
+			// Validate each field for every expected ship
+			for i, expected := range tc.expectedShips {
+				assert.Equal(t, expected.Time, ships[i].Time, "Time mismatch for %s", expected.Name)
+				assert.Equal(t, expected.Date, ships[i].Date, "Date mismatch for %s", expected.Name)
+				assert.Equal(t, expected.LocationFrom, ships[i].LocationFrom, "LocationFrom mismatch for %s", expected.Name)
+				assert.Equal(t, expected.LocationTo, ships[i].LocationTo, "LocationTo mismatch for %s", expected.Name)
+				assert.Equal(t, expected.LocationName, ships[i].LocationName, "LocationName mismatch for %s", expected.Name)
+				assert.Equal(t, expected.Name, ships[i].Name, "Name mismatch")
+				assert.Equal(t, expected.VoyageNo, ships[i].VoyageNo, "VoyageNo mismatch for %s", expected.Name)
+				assert.Equal(t, expected.Type, ships[i].Type, "Type mismatch for %s", expected.Name)
+			}
 		})
 	}
 }
