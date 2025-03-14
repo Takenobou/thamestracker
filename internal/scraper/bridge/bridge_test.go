@@ -1,9 +1,11 @@
-package scraper
+package bridge
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/Takenobou/thamestracker/internal/models"
 
 	"github.com/gocolly/colly"
 	"github.com/stretchr/testify/assert"
@@ -31,10 +33,10 @@ func TestScrapeBridgeLifts(t *testing.T) {
 	defer server.Close()
 
 	c := colly.NewCollector()
-	var lifts []BridgeLift
+	var lifts []models.BridgeLift
 
 	c.OnHTML("tbody tr", func(e *colly.HTMLElement) {
-		lift := BridgeLift{
+		lift := models.BridgeLift{
 			Date:      e.ChildText("td:nth-child(2)"),
 			Time:      e.ChildText("td:nth-child(3)"),
 			Vessel:    e.ChildText("td:nth-child(4)"),
