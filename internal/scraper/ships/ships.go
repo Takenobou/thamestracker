@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"time"
+
+	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
 
 	"github.com/Takenobou/thamestracker/config"
 	"github.com/Takenobou/thamestracker/internal/models"
@@ -40,9 +41,7 @@ func ScrapeShips(shipType string) ([]models.Ship, error) {
 		return nil, fmt.Errorf("missing api url")
 	}
 	log.Println("🔹 Fetching ships from API:", apiURL)
-
-	client := http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(apiURL)
+	resp, err := httpclient.DefaultClient.Get(apiURL)
 	if err != nil {
 		log.Println("❌ Error fetching ships:", err)
 		return nil, err

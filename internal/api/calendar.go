@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Takenobou/thamestracker/internal/helpers/utils"
 	"github.com/Takenobou/thamestracker/internal/models"
 	bridgeScraper "github.com/Takenobou/thamestracker/internal/scraper/bridge"
 	shipScraper "github.com/Takenobou/thamestracker/internal/scraper/ships"
@@ -23,7 +24,7 @@ func CalendarHandler(c *fiber.Ctx) error {
 	cal.SetProductId("-//ThamesTracker//EN")
 	now := time.Now()
 
-	// Bridge events (with caching)
+	// Bridge events
 	if eventTypeFilter == "all" || eventTypeFilter == "bridge" {
 		var lifts []models.BridgeLift
 		// Attempt to load cached lifts
@@ -38,7 +39,7 @@ func CalendarHandler(c *fiber.Ctx) error {
 			}
 		}
 		if len(lifts) > 0 {
-			uniqueLifts := FilterUniqueLifts(lifts, 4)
+			uniqueLifts := utils.FilterUniqueLifts(lifts, 4)
 			for i, lift := range uniqueLifts {
 				// Optionally filter by vessel name if a locationFilter is provided
 				if locationFilter != "" && !strings.Contains(strings.ToLower(lift.Vessel), strings.ToLower(locationFilter)) {
@@ -65,7 +66,7 @@ func CalendarHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	// Ship events (with caching)
+	// Ship events
 	if eventTypeFilter == "all" || eventTypeFilter == "ship" {
 		var ships []models.Ship
 		// Attempt to load cached ships
@@ -87,12 +88,17 @@ func CalendarHandler(c *fiber.Ctx) error {
 						continue
 					}
 				}
-				start, err := time.Parse("02/01/2006 15:04", ship.Date+" "+ship.Time)
+				// Parse the original arrival time from the stored date/time.
+				originalArrival, err := time.Parse("02/01/2006 15:04", ship.Date+" "+ship.Time)
 				if err != nil {
 					log.Printf("Error parsing ship time for %s: %v", ship.Name, err)
 					continue
 				}
+				// Override the event start to today's date but with the same time-of-day.
+				today := now
+				start := time.Date(today.Year(), today.Month(), today.Day(), originalArrival.Hour(), originalArrival.Minute(), 0, 0, today.Location())
 				end := start.Add(15 * time.Minute)
+
 				eventID := fmt.Sprintf("ship-%d@thamestracker", i)
 				event := cal.AddEvent(eventID)
 				event.SetCreatedTime(now)
@@ -101,13 +107,14 @@ func CalendarHandler(c *fiber.Ctx) error {
 				event.SetStartAt(start)
 				event.SetEndAt(end)
 				event.SetSummary(fmt.Sprintf("Ship In Port: %s", ship.Name))
-
+				// Use the ship's actual location (if available).
 				shipLocation := ship.LocationName
 				if shipLocation == "" {
 					shipLocation = strings.TrimSpace(ship.LocationFrom + " " + ship.LocationTo)
 				}
 				event.SetLocation(shipLocation)
-				event.SetDescription(fmt.Sprintf("Voyage: %s", ship.VoyageNo))
+				// Include the original arrival date/time in the description.
+				event.SetDescription(fmt.Sprintf("Arrived: %s | Voyage: %s", ship.Date+" "+ship.Time, ship.VoyageNo))
 			}
 		}
 	}

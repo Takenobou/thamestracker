@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Takenobou/thamestracker/internal/helpers/utils"
 	"github.com/Takenobou/thamestracker/internal/models"
 	bridgeScraper "github.com/Takenobou/thamestracker/internal/scraper/bridge"
 	shipScraper "github.com/Takenobou/thamestracker/internal/scraper/ships"
@@ -33,7 +34,7 @@ func GetBridgeLifts(c *fiber.Ctx) error {
 	// Filter unique lifts if query parameter is set
 	unique := c.Query("unique", "false")
 	if unique == "true" {
-		lifts = FilterUniqueLifts(lifts, 4)
+		lifts = utils.FilterUniqueLifts(lifts, 4)
 	}
 
 	return c.JSON(lifts)
@@ -71,7 +72,7 @@ func GetShipData(shipType, cacheKey string, c *fiber.Ctx) error {
 		storage.SetCache(cacheKey, ships, 30*time.Minute)
 	}
 
-	// **Apply Filtering** based on additional query parameters.
-	filteredShips := FilterShips(ships, c)
+	// Apply filtering based on additional query parameters.
+	filteredShips := utils.FilterShips(ships, c)
 	return c.JSON(filteredShips)
 }

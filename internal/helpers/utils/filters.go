@@ -1,4 +1,4 @@
-package api
+package utils
 
 import (
 	"strings"
@@ -9,7 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// FilterUniqueLifts filters out common bridge lifts, returning only unique ones.
+// FilterUniqueLifts filters out bridge lifts that appear more than a given threshold.
 func FilterUniqueLifts(lifts []models.BridgeLift, threshold int) []models.BridgeLift {
 	vesselCount := make(map[string]int)
 	for _, lift := range lifts {
