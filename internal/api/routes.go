@@ -2,8 +2,9 @@ package api
 
 import "github.com/gofiber/fiber/v2"
 
-func SetupRoutes(app *fiber.App) {
-	app.Get("/bridge-lifts", GetBridgeLifts)
-	app.Get("/ships", GetShips)
-	app.Get("/calendar.ics", CalendarHandler)
+// SetupRoutes initializes routes using the provided API handler.
+func SetupRoutes(app *fiber.App, handler *APIHandler) {
+	app.Get("/bridge-lifts", handler.GetBridgeLifts)
+	app.Get("/ships", handler.GetShips)
+	app.Get("/calendar.ics", handler.CalendarHandler)
 }
