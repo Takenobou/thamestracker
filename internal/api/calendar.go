@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Takenobou/thamestracker/internal/models"
 	bridgeScraper "github.com/Takenobou/thamestracker/internal/scraper/bridge"
 	shipScraper "github.com/Takenobou/thamestracker/internal/scraper/ships"
+	"github.com/Takenobou/thamestracker/internal/storage"
 	ics "github.com/arran4/golang-ical"
 	"github.com/gofiber/fiber/v2"
 )
@@ -21,14 +23,24 @@ func CalendarHandler(c *fiber.Ctx) error {
 	cal.SetProductId("-//ThamesTracker//EN")
 	now := time.Now()
 
+	// Bridge events (with caching)
 	if eventTypeFilter == "all" || eventTypeFilter == "bridge" {
-		lifts, err := bridgeScraper.ScrapeBridgeLifts()
-		if err != nil {
-			log.Println("Error scraping bridge lifts:", err)
-		} else {
+		var lifts []models.BridgeLift
+		// Attempt to load cached lifts
+		if err := storage.GetCache("bridge_lifts", &lifts); err != nil {
+			// Cache miss, so scrape fresh data
+			l, err := bridgeScraper.ScrapeBridgeLifts()
+			if err != nil {
+				log.Println("Error scraping bridge lifts:", err)
+			} else {
+				lifts = l
+				storage.SetCache("bridge_lifts", lifts, 15*time.Minute)
+			}
+		}
+		if len(lifts) > 0 {
 			uniqueLifts := FilterUniqueLifts(lifts, 4)
 			for i, lift := range uniqueLifts {
-				// Optionally filter bridge events by location based on vessel name
+				// Optionally filter by vessel name if a locationFilter is provided
 				if locationFilter != "" && !strings.Contains(strings.ToLower(lift.Vessel), strings.ToLower(locationFilter)) {
 					continue
 				}
@@ -38,6 +50,7 @@ func CalendarHandler(c *fiber.Ctx) error {
 					continue
 				}
 				end := start.Add(10 * time.Minute)
+
 				eventID := fmt.Sprintf("bridge-%d@thamestracker", i)
 				event := cal.AddEvent(eventID)
 				event.SetCreatedTime(now)
@@ -45,20 +58,29 @@ func CalendarHandler(c *fiber.Ctx) error {
 				event.SetModifiedAt(now)
 				event.SetStartAt(start)
 				event.SetEndAt(end)
-				event.SetSummary(fmt.Sprintf("Bridge Lift: %s", lift.Vessel))
-				event.SetLocation("Tower Bridge")
+				event.SetSummary(fmt.Sprintf("Tower Bridge Lift: %s", lift.Vessel))
 				event.SetDescription(fmt.Sprintf("Direction: %s", lift.Direction))
+				event.SetLocation("Tower Bridge\n222 Tower Bridge Road, London, SE1 2UP, England")
 			}
 		}
 	}
 
+	// Ship events (with caching)
 	if eventTypeFilter == "all" || eventTypeFilter == "ship" {
-		ships, err := shipScraper.ScrapeShips("inport")
-		if err != nil {
-			log.Println("Error scraping ship data:", err)
-		} else {
-			// You can also apply location filtering directly here if needed.
+		var ships []models.Ship
+		// Attempt to load cached ships
+		if err := storage.GetCache("ships_in_port", &ships); err != nil {
+			s, err := shipScraper.ScrapeShips("inport")
+			if err != nil {
+				log.Println("Error scraping ship data:", err)
+			} else {
+				ships = s
+				storage.SetCache("ships_in_port", ships, 30*time.Minute)
+			}
+		}
+		if len(ships) > 0 {
 			for i, ship := range ships {
+				// Apply location filter if provided
 				if locationFilter != "" {
 					combinedLocation := strings.ToLower(ship.LocationFrom + " " + ship.LocationTo + " " + ship.LocationName)
 					if !strings.Contains(combinedLocation, strings.ToLower(locationFilter)) {
@@ -79,7 +101,12 @@ func CalendarHandler(c *fiber.Ctx) error {
 				event.SetStartAt(start)
 				event.SetEndAt(end)
 				event.SetSummary(fmt.Sprintf("Ship In Port: %s", ship.Name))
-				event.SetLocation("Port")
+
+				shipLocation := ship.LocationName
+				if shipLocation == "" {
+					shipLocation = strings.TrimSpace(ship.LocationFrom + " " + ship.LocationTo)
+				}
+				event.SetLocation(shipLocation)
 				event.SetDescription(fmt.Sprintf("Voyage: %s", ship.VoyageNo))
 			}
 		}
