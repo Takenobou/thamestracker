@@ -28,28 +28,28 @@ func main() {
 		printJSON(lifts)
 
 	case "ships":
-		shipList, err := ships.ScrapeShips("inport") // ✅ Fix: Pass "inport" explicitly
+		shipList, err := ships.ScrapeShips("inport")
 		if err != nil {
 			log.Fatalf("Failed to scrape ships in port: %v", err)
 		}
 		printJSON(shipList)
 
 	case "arrivals":
-		arrivalList, err := ships.ScrapeShips("arrivals") // ✅ Now handles arrivals
+		arrivalList, err := ships.ScrapeShips("arrivals")
 		if err != nil {
 			log.Fatalf("Failed to scrape ship arrivals: %v", err)
 		}
 		printJSON(arrivalList)
 
 	case "departures":
-		departureList, err := ships.ScrapeShips("departures") // ✅ Now handles departures
+		departureList, err := ships.ScrapeShips("departures")
 		if err != nil {
 			log.Fatalf("Failed to scrape ship departures: %v", err)
 		}
 		printJSON(departureList)
 
 	case "forecast":
-		forecastList, err := ships.ScrapeShips("forecast") // ✅ Now handles forecasts
+		forecastList, err := ships.ScrapeShips("forecast")
 		if err != nil {
 			log.Fatalf("Failed to scrape ship forecasts: %v", err)
 		}

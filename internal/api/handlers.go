@@ -33,27 +33,10 @@ func GetBridgeLifts(c *fiber.Ctx) error {
 	// Filter unique lifts if query parameter is set
 	unique := c.Query("unique", "false")
 	if unique == "true" {
-		lifts = FilterUniqueLifts(lifts)
+		lifts = FilterUniqueLifts(lifts, 4)
 	}
 
 	return c.JSON(lifts)
-}
-
-// FilterUniqueLifts filters out common lifts, returning only the unique ones.
-func FilterUniqueLifts(lifts []models.BridgeLift) []models.BridgeLift {
-	vesselCount := make(map[string]int)
-	for _, lift := range lifts {
-		vesselCount[lift.Vessel]++
-	}
-
-	var uniqueLifts []models.BridgeLift
-	for _, lift := range lifts {
-		if vesselCount[lift.Vessel] <= 2 { // Adjust the threshold if needed
-			uniqueLifts = append(uniqueLifts, lift)
-		}
-	}
-
-	return uniqueLifts
 }
 
 // GetShips handles all ship data queries by type using a query parameter.
@@ -91,60 +74,4 @@ func GetShipData(shipType, cacheKey string, c *fiber.Ctx) error {
 	// **Apply Filtering** based on additional query parameters.
 	filteredShips := FilterShips(ships, c)
 	return c.JSON(filteredShips)
-}
-
-// FilterShips applies various query filters (name, location, nationality, time range) on the ship list.
-func FilterShips(ships []models.Ship, c *fiber.Ctx) []models.Ship {
-	nameFilter := strings.ToLower(c.Query("name", ""))
-	locationFilter := strings.ToLower(c.Query("location", ""))
-	nationalityFilter := strings.ToLower(c.Query("nationality", ""))
-	afterFilter := c.Query("after", "")
-	beforeFilter := c.Query("before", "")
-
-	var result []models.Ship
-	for _, ship := range ships {
-		// Apply name filter
-		if nameFilter != "" && !strings.Contains(strings.ToLower(ship.Name), nameFilter) {
-			continue
-		}
-
-		// Apply location filter (checks multiple fields)
-		if locationFilter != "" &&
-			!strings.Contains(strings.ToLower(ship.LocationFrom), locationFilter) &&
-			!strings.Contains(strings.ToLower(ship.LocationTo), locationFilter) &&
-			!strings.Contains(strings.ToLower(ship.LocationName), locationFilter) {
-			continue
-		}
-
-		// Apply nationality filter
-		if nationalityFilter != "" && !strings.Contains(strings.ToLower(ship.Nationality), nationalityFilter) {
-			continue
-		}
-
-		// Combine Date and Time into a single time.Time object for filtering
-		combinedDateTime, err := time.Parse("02/01/2006 15:04", ship.Date+" "+ship.Time)
-		if err != nil {
-			continue // Skip if parsing fails
-		}
-
-		// Apply "after" filter
-		if afterFilter != "" {
-			parsedAfter, err := time.Parse(time.RFC3339, afterFilter)
-			if err == nil && combinedDateTime.Before(parsedAfter) {
-				continue
-			}
-		}
-
-		// Apply "before" filter
-		if beforeFilter != "" {
-			parsedBefore, err := time.Parse(time.RFC3339, beforeFilter)
-			if err == nil && combinedDateTime.After(parsedBefore) {
-				continue
-			}
-		}
-
-		result = append(result, ship)
-	}
-
-	return result
 }
