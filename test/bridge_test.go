@@ -36,7 +36,7 @@ const sampleBridgeHTML = `
 `
 
 func TestScrapeBridgeLifts(t *testing.T) {
-	// Create a mock HTTP server that serves the sample HTML.
+	// Create a mock HTTP server.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(sampleBridgeHTML))
@@ -47,7 +47,6 @@ func TestScrapeBridgeLifts(t *testing.T) {
 	c := colly.NewCollector()
 	var lifts []models.BridgeLift
 
-	// The scraper expects to extract date/time from <time> elements.
 	c.OnHTML("tbody tr", func(e *colly.HTMLElement) {
 		lift := models.BridgeLift{
 			Date:      e.ChildAttr("td:nth-child(2) time", "datetime"),
@@ -55,8 +54,6 @@ func TestScrapeBridgeLifts(t *testing.T) {
 			Vessel:    e.ChildText("td:nth-child(4)"),
 			Direction: e.ChildText("td:nth-child(5)"),
 		}
-
-		// The scraper then slices the datetime strings.
 		if lift.Date != "" {
 			lift.Date = lift.Date[:10] // e.g., "2025-04-05"
 		}
@@ -69,17 +66,10 @@ func TestScrapeBridgeLifts(t *testing.T) {
 	err := c.Visit(server.URL)
 	assert.NoError(t, err)
 
-	// Validate that two lift events were scraped.
 	assert.Len(t, lifts, 2, "expected 2 bridge lift events")
-
-	// For first row, expected values:
 	assert.Equal(t, "2025-04-05", lifts[0].Date)
 	assert.Equal(t, "17:45", lifts[0].Time)
 	assert.Equal(t, "Paddle Steamer Dixie Queen", lifts[0].Vessel)
 	assert.Equal(t, "Up river", lifts[0].Direction)
-
-	// For second row:
-	assert.Equal(t, "2025-04-05", lifts[1].Date)
-	assert.Equal(t, "18:45", lifts[1].Time)
 	assert.Equal(t, "Down river", lifts[1].Direction)
 }

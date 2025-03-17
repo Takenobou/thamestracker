@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	// Initialize the logger so that logger.Logger is not nil.
+	// Ensure logger is initialized to avoid nil pointer dereference.
 	logger.InitLogger()
 }
 
@@ -56,7 +56,7 @@ const mockAPIResponse = `{
 }`
 
 func TestScrapeVessels(t *testing.T) {
-	// Create a mock HTTP server to simulate the external API.
+	// Create a mock HTTP server for valid JSON.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(mockAPIResponse))
@@ -68,7 +68,7 @@ func TestScrapeVessels(t *testing.T) {
 	config.AppConfig.URLs.PortOfLondon = server.URL
 	defer func() { config.AppConfig.URLs.PortOfLondon = originalURL }()
 
-	// Define table-driven test cases.
+	// Table-driven tests for valid responses.
 	tests := []struct {
 		name            string
 		vesselType      string
@@ -202,4 +202,55 @@ func TestScrapeVessels(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestScrapeVessels_ErrorCases(t *testing.T) {
+	t.Run("MalformedJSON", func(t *testing.T) {
+		// Create a server that returns malformed JSON.
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{malformed json`))
+		}))
+		defer server.Close()
+
+		originalURL := config.AppConfig.URLs.PortOfLondon
+		config.AppConfig.URLs.PortOfLondon = server.URL
+		defer func() { config.AppConfig.URLs.PortOfLondon = originalURL }()
+
+		_, err := vessels.ScrapeVessels("inport")
+		assert.Error(t, err, "expected error for malformed JSON")
+	})
+
+	t.Run("MissingTimestamp", func(t *testing.T) {
+		// Create a JSON response with missing timestamp for the inport vessel.
+		response := `{
+			"inport": [
+				{
+					"location_name": "WOODS QUAY",
+					"vessel_name": "SILVER STURGEON",
+					"visit": "S7670",
+					"last_rep_dt": ""
+				}
+			],
+			"arrivals": [],
+			"departures": [],
+			"forecast": []
+		}`
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(response))
+		}))
+		defer server.Close()
+
+		originalURL := config.AppConfig.URLs.PortOfLondon
+		config.AppConfig.URLs.PortOfLondon = server.URL
+		defer func() { config.AppConfig.URLs.PortOfLondon = originalURL }()
+
+		vesselsResult, err := vessels.ScrapeVessels("inport")
+		assert.NoError(t, err)
+		// Ensure a vessel is returned.
+		assert.Len(t, vesselsResult, 1)
+		// Since missing timestamp triggers fallback using time.Now(), we only check that Time is not empty.
+		assert.NotEmpty(t, vesselsResult[0].Time, "expected fallback time to be set")
+	})
 }
