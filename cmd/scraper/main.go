@@ -8,7 +8,7 @@ import (
 	"github.com/Takenobou/thamestracker/config"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/scraper/bridge"
-	"github.com/Takenobou/thamestracker/internal/scraper/ships"
+	"github.com/Takenobou/thamestracker/internal/scraper/vessels"
 	"github.com/joho/godotenv"
 )
 
@@ -18,7 +18,7 @@ func main() {
 	config.LoadConfig()
 
 	if len(os.Args) < 2 {
-		logger.Logger.Errorf("Usage error. Usage: %s [bridge-lifts | ships | arrivals | departures | forecast]", os.Args[0])
+		logger.Logger.Errorf("Usage error. Usage: %s [bridge-lifts | vessels | arrivals | departures | forecast]", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -31,40 +31,40 @@ func main() {
 		}
 		printJSON(lifts)
 
-	case "ships":
-		shipList, err := ships.ScrapeShips("inport")
+	case "vessels":
+		vesselList, err := vessels.ScrapeVessels("inport")
 		if err != nil {
-			logger.Logger.Errorf("Failed to scrape ships in port: %v", err)
+			logger.Logger.Errorf("Failed to scrape vessels in port: %v", err)
 			os.Exit(1)
 		}
-		printJSON(shipList)
+		printJSON(vesselList)
 
 	case "arrivals":
-		arrivalList, err := ships.ScrapeShips("arrivals")
+		arrivalList, err := vessels.ScrapeVessels("arrivals")
 		if err != nil {
-			logger.Logger.Errorf("Failed to scrape ship arrivals: %v", err)
+			logger.Logger.Errorf("Failed to scrape vessel arrivals: %v", err)
 			os.Exit(1)
 		}
 		printJSON(arrivalList)
 
 	case "departures":
-		departureList, err := ships.ScrapeShips("departures")
+		departureList, err := vessels.ScrapeVessels("departures")
 		if err != nil {
-			logger.Logger.Errorf("Failed to scrape ship departures: %v", err)
+			logger.Logger.Errorf("Failed to scrape vessel departures: %v", err)
 			os.Exit(1)
 		}
 		printJSON(departureList)
 
 	case "forecast":
-		forecastList, err := ships.ScrapeShips("forecast")
+		forecastList, err := vessels.ScrapeVessels("forecast")
 		if err != nil {
-			logger.Logger.Errorf("Failed to scrape ship forecasts: %v", err)
+			logger.Logger.Errorf("Failed to scrape vessel forecasts: %v", err)
 			os.Exit(1)
 		}
 		printJSON(forecastList)
 
 	default:
-		logger.Logger.Errorf("Unknown command: %s. Usage: Use 'bridge-lifts', 'ships', 'arrivals', 'departures', or 'forecast'", os.Args[1])
+		logger.Logger.Errorf("Unknown command: %s. Usage: Use 'bridge-lifts', 'vessels', 'arrivals', 'departures', or 'forecast'", os.Args[1])
 		os.Exit(1)
 	}
 }

@@ -1,7 +1,7 @@
 package models
 
-// Ship represents a generic ship movement
-type Ship struct {
+// Vessel represents a generic vessel movement.
+type Vessel struct {
 	Time         string `json:"time"`
 	Date         string `json:"date"`
 	LocationFrom string `json:"location_from,omitempty"`

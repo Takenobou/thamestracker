@@ -1,4 +1,4 @@
-package ships
+package vessels
 
 import (
 	"net/http"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Mock API response covering all ship categories
+// Mock API response covering all vessel categories.
 const mockAPIResponse = `{
 	"inport": [
 		{
@@ -49,31 +49,31 @@ const mockAPIResponse = `{
 	]
 }`
 
-func TestScrapeShips(t *testing.T) {
-	// Create a mock HTTP server
+func TestScrapeVessels(t *testing.T) {
+	// Create a mock HTTP server.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(mockAPIResponse))
 	}))
 	defer server.Close()
 
-	// Backup and override API URL
+	// Backup and override API URL.
 	originalURL := config.AppConfig.URLs.PortOfLondon
 	config.AppConfig.URLs.PortOfLondon = server.URL
-	defer func() { config.AppConfig.URLs.PortOfLondon = originalURL }() // Restore after test
+	defer func() { config.AppConfig.URLs.PortOfLondon = originalURL }() // Restore after test.
 
-	// Define test cases for different ship types including "all"
+	// Define test cases for different vessel types including "all".
 	tests := []struct {
-		name          string
-		shipType      string
-		expectedLen   int
-		expectedShips []models.Ship
+		name            string
+		vesselType      string
+		expectedLen     int
+		expectedVessels []models.Vessel
 	}{
 		{
 			name:        "Inport",
-			shipType:    "inport",
+			vesselType:  "inport",
 			expectedLen: 1,
-			expectedShips: []models.Ship{
+			expectedVessels: []models.Vessel{
 				{
 					Time:         "20:33",
 					Date:         "25/01/2025",
@@ -86,9 +86,9 @@ func TestScrapeShips(t *testing.T) {
 		},
 		{
 			name:        "Arrivals",
-			shipType:    "arrivals",
+			vesselType:  "arrivals",
 			expectedLen: 1,
-			expectedShips: []models.Ship{
+			expectedVessels: []models.Vessel{
 				{
 					Time:         "14:22",
 					Date:         "13/03/2025",
@@ -102,9 +102,9 @@ func TestScrapeShips(t *testing.T) {
 		},
 		{
 			name:        "Departures",
-			shipType:    "departures",
+			vesselType:  "departures",
 			expectedLen: 1,
-			expectedShips: []models.Ship{
+			expectedVessels: []models.Vessel{
 				{
 					Time:         "15:39",
 					Date:         "13/03/2025",
@@ -118,9 +118,9 @@ func TestScrapeShips(t *testing.T) {
 		},
 		{
 			name:        "Forecast",
-			shipType:    "forecast",
+			vesselType:  "forecast",
 			expectedLen: 1,
-			expectedShips: []models.Ship{
+			expectedVessels: []models.Vessel{
 				{
 					Time:         "14:15",
 					Date:         "14/03/2025",
@@ -134,9 +134,9 @@ func TestScrapeShips(t *testing.T) {
 		},
 		{
 			name:        "All",
-			shipType:    "all",
+			vesselType:  "all",
 			expectedLen: 4,
-			expectedShips: []models.Ship{
+			expectedVessels: []models.Vessel{
 				{
 					Time:         "20:33",
 					Date:         "25/01/2025",
@@ -176,23 +176,23 @@ func TestScrapeShips(t *testing.T) {
 		},
 	}
 
-	// Run tests for each ship type
+	// Run tests for each vessel type.
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ships, err := ScrapeShips(tc.shipType)
+			vessels, err := ScrapeVessels(tc.vesselType)
 			assert.NoError(t, err)
-			assert.Len(t, ships, tc.expectedLen, "unexpected number of ships for type %s", tc.shipType)
+			assert.Len(t, vessels, tc.expectedLen, "unexpected number of vessels for type %s", tc.vesselType)
 
-			// Validate each field for every expected ship
-			for i, expected := range tc.expectedShips {
-				assert.Equal(t, expected.Time, ships[i].Time, "Time mismatch for %s", expected.Name)
-				assert.Equal(t, expected.Date, ships[i].Date, "Date mismatch for %s", expected.Name)
-				assert.Equal(t, expected.LocationFrom, ships[i].LocationFrom, "LocationFrom mismatch for %s", expected.Name)
-				assert.Equal(t, expected.LocationTo, ships[i].LocationTo, "LocationTo mismatch for %s", expected.Name)
-				assert.Equal(t, expected.LocationName, ships[i].LocationName, "LocationName mismatch for %s", expected.Name)
-				assert.Equal(t, expected.Name, ships[i].Name, "Name mismatch")
-				assert.Equal(t, expected.VoyageNo, ships[i].VoyageNo, "VoyageNo mismatch for %s", expected.Name)
-				assert.Equal(t, expected.Type, ships[i].Type, "Type mismatch for %s", expected.Name)
+			// Validate each field for every expected vessel.
+			for i, expected := range tc.expectedVessels {
+				assert.Equal(t, expected.Time, vessels[i].Time, "Time mismatch for %s", expected.Name)
+				assert.Equal(t, expected.Date, vessels[i].Date, "Date mismatch for %s", expected.Name)
+				assert.Equal(t, expected.LocationFrom, vessels[i].LocationFrom, "LocationFrom mismatch for %s", expected.Name)
+				assert.Equal(t, expected.LocationTo, vessels[i].LocationTo, "LocationTo mismatch for %s", expected.Name)
+				assert.Equal(t, expected.LocationName, vessels[i].LocationName, "LocationName mismatch for %s", expected.Name)
+				assert.Equal(t, expected.Name, vessels[i].Name, "Name mismatch")
+				assert.Equal(t, expected.VoyageNo, vessels[i].VoyageNo, "VoyageNo mismatch for %s", expected.Name)
+				assert.Equal(t, expected.Type, vessels[i].Type, "Type mismatch for %s", expected.Name)
 			}
 		})
 	}

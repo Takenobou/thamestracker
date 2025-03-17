@@ -49,15 +49,15 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 	return c.JSON(lifts)
 }
 
-func (h *APIHandler) GetShips(c *fiber.Ctx) error {
+func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
-	ships, err := h.svc.GetShips(opts.ShipType)
+	vessels, err := h.svc.GetVessels(opts.VesselType)
 	if err != nil {
-		logger.Logger.Errorf("Error fetching ship data: %v", err)
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve ship data"})
+		logger.Logger.Errorf("Error fetching vessel data: %v", err)
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve vessel data"})
 	}
-	ships = utils.FilterShips(ships, c)
-	return c.JSON(ships)
+	vessels = utils.FilterVessels(vessels, c) // Ensure you update your filtering helper accordingly.
+	return c.JSON(vessels)
 }
 
 func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
@@ -101,43 +101,43 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	// Ship events in the calendar.
-	if opts.EventType == "all" || opts.EventType == "ship" {
-		ships, err := h.svc.GetShips("inport")
+	// Vessel events in the calendar.
+	if opts.EventType == "all" || opts.EventType == "vessel" {
+		vessels, err := h.svc.GetVessels("inport")
 		if err != nil {
-			logger.Logger.Errorf("Error fetching ship data: %v", err)
+			logger.Logger.Errorf("Error fetching vessel data: %v", err)
 		} else {
-			for i, ship := range ships {
+			for i, vessel := range vessels {
 				if opts.Location != "" {
-					combinedLocation := strings.ToLower(ship.LocationFrom + " " + ship.LocationTo + " " + ship.LocationName)
+					combinedLocation := strings.ToLower(vessel.LocationFrom + " " + vessel.LocationTo + " " + vessel.LocationName)
 					if !strings.Contains(combinedLocation, opts.Location) {
 						continue
 					}
 				}
 				// Parse original arrival time.
-				originalArrival, err := time.Parse("02/01/2006 15:04", ship.Date+" "+ship.Time)
+				originalArrival, err := time.Parse("02/01/2006 15:04", vessel.Date+" "+vessel.Time)
 				if err != nil {
-					logger.Logger.Errorf("Error parsing ship time for %s: %v", ship.Name, err)
+					logger.Logger.Errorf("Error parsing vessel time for %s: %v", vessel.Name, err)
 					continue
 				}
 				// Override the event start to today's date, preserving time-of-day.
 				today := now
 				start := time.Date(today.Year(), today.Month(), today.Day(), originalArrival.Hour(), originalArrival.Minute(), 0, 0, today.Location())
 				end := start.Add(15 * time.Minute)
-				eventID := fmt.Sprintf("ship-%d@thamestracker", i)
+				eventID := fmt.Sprintf("vessel-%d@thamestracker", i)
 				event := cal.AddEvent(eventID)
 				event.SetCreatedTime(now)
 				event.SetDtStampTime(now)
 				event.SetModifiedAt(now)
 				event.SetStartAt(start)
 				event.SetEndAt(end)
-				event.SetSummary(fmt.Sprintf("Ship In Port: %s", ship.Name))
-				shipLocation := ship.LocationName
-				if shipLocation == "" {
-					shipLocation = strings.TrimSpace(ship.LocationFrom + " " + ship.LocationTo)
+				event.SetSummary(fmt.Sprintf("Vessel In Port: %s", vessel.Name))
+				vesselLocation := vessel.LocationName
+				if vesselLocation == "" {
+					vesselLocation = strings.TrimSpace(vessel.LocationFrom + " " + vessel.LocationTo)
 				}
-				event.SetLocation(shipLocation)
-				event.SetDescription(fmt.Sprintf("Arrived: %s | Voyage: %s", ship.Date+" "+ship.Time, ship.VoyageNo))
+				event.SetLocation(vesselLocation)
+				event.SetDescription(fmt.Sprintf("Arrived: %s | Voyage: %s", vessel.Date+" "+vessel.Time, vessel.VoyageNo))
 			}
 		}
 	}

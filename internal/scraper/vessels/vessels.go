@@ -1,4 +1,4 @@
-package ships
+package vessels
 
 import (
 	"encoding/json"
@@ -11,16 +11,16 @@ import (
 	"github.com/Takenobou/thamestracker/internal/models"
 )
 
-// API response structure
+// apiResponse represents the API response structure.
 type apiResponse struct {
-	InPort     []shipData `json:"inport"`
-	Arrivals   []shipData `json:"arrivals"`
-	Departures []shipData `json:"departures"`
-	Forecast   []shipData `json:"forecast"`
+	InPort     []vesselData `json:"inport"`
+	Arrivals   []vesselData `json:"arrivals"`
+	Departures []vesselData `json:"departures"`
+	Forecast   []vesselData `json:"forecast"`
 }
 
-// shipData represents a generic ship record in the API response
-type shipData struct {
+// vesselData represents a generic vessel record in the API response.
+type vesselData struct {
 	LocationFrom string `json:"location_from,omitempty"`
 	LocationTo   string `json:"location_to,omitempty"`
 	LocationName string `json:"location_name,omitempty"`
@@ -32,17 +32,17 @@ type shipData struct {
 	ETADate      string `json:"etad_dt,omitempty"`      // Used in forecast
 }
 
-// ScrapeShips fetches ship data based on the type (arrivals, departures, inport, forecast)
-func ScrapeShips(shipType string) ([]models.Ship, error) {
+// ScrapeVessels fetches vessel data based on the type (arrivals, departures, inport, forecast).
+func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 	apiURL := config.AppConfig.URLs.PortOfLondon
 	if apiURL == "" {
 		logger.Logger.Errorf("Port of London API URL is missing from config.toml")
 		return nil, fmt.Errorf("missing api url")
 	}
-	logger.Logger.Infof("Fetching ships from API, url: %s, shipType: %s", apiURL, shipType)
+	logger.Logger.Infof("Fetching vessels from API, url: %s, vesselType: %s", apiURL, vesselType)
 	resp, err := httpclient.DefaultClient.Get(apiURL)
 	if err != nil {
-		logger.Logger.Errorf("Error fetching ships: %v", err)
+		logger.Logger.Errorf("Error fetching vessels: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -53,11 +53,11 @@ func ScrapeShips(shipType string) ([]models.Ship, error) {
 		return nil, err
 	}
 
-	var ships []models.Ship
+	var vessels []models.Vessel
 
-	// Helper function to process ship data from a given category.
-	processShips := func(shipList []shipData, category string) {
-		for _, item := range shipList {
+	// Helper function to process vessel data from a given category.
+	processVessels := func(vesselList []vesselData, category string) {
+		for _, item := range vesselList {
 			var timestamp string
 			switch category {
 			case "departures":
@@ -79,43 +79,43 @@ func ScrapeShips(shipType string) ([]models.Ship, error) {
 				continue
 			}
 
-			ships = append(ships, models.Ship{
-				Time:         parsedTime.Format("15:04"),      // HH:MM format
-				Date:         parsedTime.Format("02/01/2006"), // DD/MM/YYYY format
+			vessels = append(vessels, models.Vessel{
+				Time:         parsedTime.Format("15:04"),
+				Date:         parsedTime.Format("02/01/2006"),
 				LocationFrom: item.LocationFrom,
 				LocationTo:   item.LocationTo,
 				LocationName: item.LocationName,
 				Name:         item.VesselName,
 				Nationality:  item.Nationality,
 				VoyageNo:     item.Visit,
-				Type:         category, // Set the type based on the category processed
+				Type:         category,
 			})
 		}
 	}
 
 	// Handle "all" by processing each category.
-	if shipType == "all" {
-		processShips(result.InPort, "inport")
-		processShips(result.Arrivals, "arrivals")
-		processShips(result.Departures, "departures")
-		processShips(result.Forecast, "forecast")
+	if vesselType == "all" {
+		processVessels(result.InPort, "inport")
+		processVessels(result.Arrivals, "arrivals")
+		processVessels(result.Departures, "departures")
+		processVessels(result.Forecast, "forecast")
 	} else {
-		var shipList []shipData
-		switch shipType {
+		var vesselList []vesselData
+		switch vesselType {
 		case "inport":
-			shipList = result.InPort
+			vesselList = result.InPort
 		case "arrivals":
-			shipList = result.Arrivals
+			vesselList = result.Arrivals
 		case "departures":
-			shipList = result.Departures
+			vesselList = result.Departures
 		case "forecast":
-			shipList = result.Forecast
+			vesselList = result.Forecast
 		default:
-			return nil, fmt.Errorf("invalid shipType: %s", shipType)
+			return nil, fmt.Errorf("invalid vesselType: %s", vesselType)
 		}
-		processShips(shipList, shipType)
+		processVessels(vesselList, vesselType)
 	}
 
-	logger.Logger.Infof("Retrieved ships from API, count: %d, shipType: %s", len(ships), shipType)
-	return ships, nil
+	logger.Logger.Infof("Retrieved vessels from API, count: %d, vesselType: %s", len(vessels), vesselType)
+	return vessels, nil
 }

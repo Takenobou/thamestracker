@@ -2,7 +2,6 @@ package utils
 
 import (
 	"strings"
-
 	"time"
 
 	"github.com/Takenobou/thamestracker/internal/models"
@@ -25,29 +24,29 @@ func FilterUniqueLifts(lifts []models.BridgeLift, threshold int) []models.Bridge
 	return uniqueLifts
 }
 
-// FilterShips applies various query filters on a list of ships.
-func FilterShips(ships []models.Ship, c *fiber.Ctx) []models.Ship {
+// FilterVessels applies various query filters on a list of vessels.
+func FilterVessels(vessels []models.Vessel, c *fiber.Ctx) []models.Vessel {
 	nameFilter := strings.ToLower(c.Query("name", ""))
 	locationFilter := strings.ToLower(c.Query("location", ""))
 	nationalityFilter := strings.ToLower(c.Query("nationality", ""))
 	afterFilter := c.Query("after", "")
 	beforeFilter := c.Query("before", "")
 
-	var result []models.Ship
-	for _, ship := range ships {
-		if nameFilter != "" && !strings.Contains(strings.ToLower(ship.Name), nameFilter) {
+	var result []models.Vessel
+	for _, vessel := range vessels {
+		if nameFilter != "" && !strings.Contains(strings.ToLower(vessel.Name), nameFilter) {
 			continue
 		}
 		if locationFilter != "" &&
-			!strings.Contains(strings.ToLower(ship.LocationFrom), locationFilter) &&
-			!strings.Contains(strings.ToLower(ship.LocationTo), locationFilter) &&
-			!strings.Contains(strings.ToLower(ship.LocationName), locationFilter) {
+			!strings.Contains(strings.ToLower(vessel.LocationFrom), locationFilter) &&
+			!strings.Contains(strings.ToLower(vessel.LocationTo), locationFilter) &&
+			!strings.Contains(strings.ToLower(vessel.LocationName), locationFilter) {
 			continue
 		}
-		if nationalityFilter != "" && !strings.Contains(strings.ToLower(ship.Nationality), nationalityFilter) {
+		if nationalityFilter != "" && !strings.Contains(strings.ToLower(vessel.Nationality), nationalityFilter) {
 			continue
 		}
-		combinedDateTime, err := time.Parse("02/01/2006 15:04", ship.Date+" "+ship.Time)
+		combinedDateTime, err := time.Parse("02/01/2006 15:04", vessel.Date+" "+vessel.Time)
 		if err != nil {
 			continue
 		}
@@ -63,7 +62,7 @@ func FilterShips(ships []models.Ship, c *fiber.Ctx) []models.Ship {
 				continue
 			}
 		}
-		result = append(result, ship)
+		result = append(result, vessel)
 	}
 	return result
 }
