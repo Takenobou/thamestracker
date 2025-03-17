@@ -1,4 +1,4 @@
-package vessels
+package test
 
 import (
 	"net/http"
@@ -6,11 +6,17 @@ import (
 	"testing"
 
 	"github.com/Takenobou/thamestracker/config"
+	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/models"
+	"github.com/Takenobou/thamestracker/internal/scraper/vessels"
 	"github.com/stretchr/testify/assert"
 )
 
-// Mock API response covering all vessel categories.
+func init() {
+	// Initialize the logger so that logger.Logger is not nil.
+	logger.InitLogger()
+}
+
 const mockAPIResponse = `{
 	"inport": [
 		{
@@ -50,30 +56,30 @@ const mockAPIResponse = `{
 }`
 
 func TestScrapeVessels(t *testing.T) {
-	// Create a mock HTTP server.
+	// Create a mock HTTP server to simulate the external API.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockAPIResponse))
+		_, _ = w.Write([]byte(mockAPIResponse))
 	}))
 	defer server.Close()
 
-	// Backup and override API URL.
+	// Override API URL.
 	originalURL := config.AppConfig.URLs.PortOfLondon
 	config.AppConfig.URLs.PortOfLondon = server.URL
-	defer func() { config.AppConfig.URLs.PortOfLondon = originalURL }() // Restore after test.
+	defer func() { config.AppConfig.URLs.PortOfLondon = originalURL }()
 
-	// Define test cases for different vessel types including "all".
+	// Define table-driven test cases.
 	tests := []struct {
 		name            string
 		vesselType      string
-		expectedLen     int
-		expectedVessels []models.Vessel
+		expectedCount   int
+		expectedDetails []models.Vessel
 	}{
 		{
-			name:        "Inport",
-			vesselType:  "inport",
-			expectedLen: 1,
-			expectedVessels: []models.Vessel{
+			name:          "Inport",
+			vesselType:    "inport",
+			expectedCount: 1,
+			expectedDetails: []models.Vessel{
 				{
 					Time:         "20:33",
 					Date:         "25/01/2025",
@@ -85,10 +91,10 @@ func TestScrapeVessels(t *testing.T) {
 			},
 		},
 		{
-			name:        "Arrivals",
-			vesselType:  "arrivals",
-			expectedLen: 1,
-			expectedVessels: []models.Vessel{
+			name:          "Arrivals",
+			vesselType:    "arrivals",
+			expectedCount: 1,
+			expectedDetails: []models.Vessel{
 				{
 					Time:         "14:22",
 					Date:         "13/03/2025",
@@ -101,10 +107,10 @@ func TestScrapeVessels(t *testing.T) {
 			},
 		},
 		{
-			name:        "Departures",
-			vesselType:  "departures",
-			expectedLen: 1,
-			expectedVessels: []models.Vessel{
+			name:          "Departures",
+			vesselType:    "departures",
+			expectedCount: 1,
+			expectedDetails: []models.Vessel{
 				{
 					Time:         "15:39",
 					Date:         "13/03/2025",
@@ -117,10 +123,10 @@ func TestScrapeVessels(t *testing.T) {
 			},
 		},
 		{
-			name:        "Forecast",
-			vesselType:  "forecast",
-			expectedLen: 1,
-			expectedVessels: []models.Vessel{
+			name:          "Forecast",
+			vesselType:    "forecast",
+			expectedCount: 1,
+			expectedDetails: []models.Vessel{
 				{
 					Time:         "14:15",
 					Date:         "14/03/2025",
@@ -133,10 +139,10 @@ func TestScrapeVessels(t *testing.T) {
 			},
 		},
 		{
-			name:        "All",
-			vesselType:  "all",
-			expectedLen: 4,
-			expectedVessels: []models.Vessel{
+			name:          "All",
+			vesselType:    "all",
+			expectedCount: 4,
+			expectedDetails: []models.Vessel{
 				{
 					Time:         "20:33",
 					Date:         "25/01/2025",
@@ -176,23 +182,23 @@ func TestScrapeVessels(t *testing.T) {
 		},
 	}
 
-	// Run tests for each vessel type.
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			vessels, err := ScrapeVessels(tc.vesselType)
+			vesselsResult, err := vessels.ScrapeVessels(tc.vesselType)
 			assert.NoError(t, err)
-			assert.Len(t, vessels, tc.expectedLen, "unexpected number of vessels for type %s", tc.vesselType)
+			assert.Len(t, vesselsResult, tc.expectedCount, "unexpected number of vessels for type %s", tc.vesselType)
 
-			// Validate each field for every expected vessel.
-			for i, expected := range tc.expectedVessels {
-				assert.Equal(t, expected.Time, vessels[i].Time, "Time mismatch for %s", expected.Name)
-				assert.Equal(t, expected.Date, vessels[i].Date, "Date mismatch for %s", expected.Name)
-				assert.Equal(t, expected.LocationFrom, vessels[i].LocationFrom, "LocationFrom mismatch for %s", expected.Name)
-				assert.Equal(t, expected.LocationTo, vessels[i].LocationTo, "LocationTo mismatch for %s", expected.Name)
-				assert.Equal(t, expected.LocationName, vessels[i].LocationName, "LocationName mismatch for %s", expected.Name)
-				assert.Equal(t, expected.Name, vessels[i].Name, "Name mismatch")
-				assert.Equal(t, expected.VoyageNo, vessels[i].VoyageNo, "VoyageNo mismatch for %s", expected.Name)
-				assert.Equal(t, expected.Type, vessels[i].Type, "Type mismatch for %s", expected.Name)
+			// Validate each expected vessel's key fields.
+			for i, expected := range tc.expectedDetails {
+				actual := vesselsResult[i]
+				assert.Equal(t, expected.Time, actual.Time, "Time mismatch for vessel %s", expected.Name)
+				assert.Equal(t, expected.Date, actual.Date, "Date mismatch for vessel %s", expected.Name)
+				assert.Equal(t, expected.LocationFrom, actual.LocationFrom, "LocationFrom mismatch for vessel %s", expected.Name)
+				assert.Equal(t, expected.LocationTo, actual.LocationTo, "LocationTo mismatch for vessel %s", expected.Name)
+				assert.Equal(t, expected.LocationName, actual.LocationName, "LocationName mismatch for vessel %s", expected.Name)
+				assert.Equal(t, expected.Name, actual.Name, "Name mismatch for vessel %s", expected.Name)
+				assert.Equal(t, expected.VoyageNo, actual.VoyageNo, "VoyageNo mismatch for vessel %s", expected.Name)
+				assert.Equal(t, expected.Type, actual.Type, "Type mismatch for vessel %s", expected.Name)
 			}
 		})
 	}
