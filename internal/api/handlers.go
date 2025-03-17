@@ -91,6 +91,7 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 					continue
 				}
 				end := start.Add(10 * time.Minute)
+
 				eventID := fmt.Sprintf("bridge-%d@thamestracker", i)
 				event := cal.AddEvent(eventID)
 				event.SetCreatedTime(now)
@@ -112,36 +113,52 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 			logger.Logger.Errorf("Error fetching vessel data: %v", err)
 		} else {
 			for i, vessel := range vessels {
+				// Optional location filter
 				if opts.Location != "" {
 					combinedLocation := strings.ToLower(vessel.LocationFrom + " " + vessel.LocationTo + " " + vessel.LocationName)
 					if !strings.Contains(combinedLocation, opts.Location) {
 						continue
 					}
 				}
-				// Parse original arrival time.
-				originalArrival, err := time.Parse("02/01/2006 15:04", vessel.Date+" "+vessel.Time)
-				if err != nil {
-					logger.Logger.Errorf("Error parsing vessel time for %s: %v", vessel.Name, err)
-					continue
-				}
-				// Override the event start to today's date, preserving time-of-day.
-				today := now
-				start := time.Date(today.Year(), today.Month(), today.Day(), originalArrival.Hour(), originalArrival.Minute(), 0, 0, today.Location())
-				end := start.Add(15 * time.Minute)
+
 				eventID := fmt.Sprintf("vessel-%d@thamestracker", i)
 				event := cal.AddEvent(eventID)
 				event.SetCreatedTime(now)
 				event.SetDtStampTime(now)
 				event.SetModifiedAt(now)
-				event.SetStartAt(start)
-				event.SetEndAt(end)
-				event.SetSummary(fmt.Sprintf("Vessel In Port: %s", vessel.Name))
+
+				if vessel.Type == "inport" {
+					today := time.Now()
+					start := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
+					end := start.Add(24 * time.Hour)
+
+					event.SetAllDayStartAt(start)
+					event.SetAllDayEndAt(end)
+
+					event.SetSummary(fmt.Sprintf("Vessel In Port: %s", vessel.Name))
+				} else {
+					originalArrival, err := time.Parse("02/01/2006 15:04", vessel.Date+" "+vessel.Time)
+					if err != nil {
+						logger.Logger.Errorf("Error parsing vessel time for %s: %v", vessel.Name, err)
+						continue
+					}
+					today := now
+					start := time.Date(today.Year(), today.Month(), today.Day(),
+						originalArrival.Hour(), originalArrival.Minute(), 0, 0, today.Location())
+					end := start.Add(15 * time.Minute)
+
+					event.SetStartAt(start)
+					event.SetEndAt(end)
+					event.SetSummary(fmt.Sprintf("Vessel In Port: %s", vessel.Name))
+				}
+
 				vesselLocation := vessel.LocationName
 				if vesselLocation == "" {
 					vesselLocation = strings.TrimSpace(vessel.LocationFrom + " " + vessel.LocationTo)
 				}
 				event.SetLocation(vesselLocation)
-				event.SetDescription(fmt.Sprintf("Arrived: %s | Voyage: %s", vessel.Date+" "+vessel.Time, vessel.VoyageNo))
+				event.SetDescription(fmt.Sprintf("Arrived: %s | Voyage: %s",
+					vessel.Date+" "+vessel.Time, vessel.VoyageNo))
 			}
 		}
 	}
