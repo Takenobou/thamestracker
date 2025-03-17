@@ -69,8 +69,8 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 			}
 
 			if timestamp == "" {
-				logger.Logger.Warnf("Missing timestamp for vessel: %s", item.VesselName)
-				continue
+				logger.Logger.Warnf("Missing timestamp for vessel: %s. Using current time as fallback.", item.VesselName)
+				timestamp = time.Now().Format("2006-01-02 15:04:05.000")
 			}
 
 			parsedTime, err := time.Parse("2006-01-02 15:04:05.000", timestamp)
