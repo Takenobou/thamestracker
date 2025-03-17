@@ -8,16 +8,20 @@ import (
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/helpers/utils"
 	"github.com/Takenobou/thamestracker/internal/models"
-	"github.com/Takenobou/thamestracker/internal/service"
 	ics "github.com/arran4/golang-ical"
 	"github.com/gofiber/fiber/v2"
 )
 
-type APIHandler struct {
-	svc *service.Service
+type ServiceInterface interface {
+	GetBridgeLifts() ([]models.BridgeLift, error)
+	GetVessels(vesselType string) ([]models.Vessel, error)
 }
 
-func NewAPIHandler(svc *service.Service) *APIHandler {
+type APIHandler struct {
+	svc ServiceInterface
+}
+
+func NewAPIHandler(svc ServiceInterface) *APIHandler {
 	return &APIHandler{svc: svc}
 }
 
