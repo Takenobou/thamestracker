@@ -3,12 +3,11 @@ package ships
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
-	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
-
 	"github.com/Takenobou/thamestracker/config"
+	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
+	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/models"
 )
 
@@ -37,20 +36,20 @@ type shipData struct {
 func ScrapeShips(shipType string) ([]models.Ship, error) {
 	apiURL := config.AppConfig.URLs.PortOfLondon
 	if apiURL == "" {
-		log.Println("❌ Error: Port of London API URL is missing from config.toml")
+		logger.Logger.Errorf("Port of London API URL is missing from config.toml")
 		return nil, fmt.Errorf("missing api url")
 	}
-	log.Println("🔹 Fetching ships from API:", apiURL)
+	logger.Logger.Infof("Fetching ships from API, url: %s, shipType: %s", apiURL, shipType)
 	resp, err := httpclient.DefaultClient.Get(apiURL)
 	if err != nil {
-		log.Println("❌ Error fetching ships:", err)
+		logger.Logger.Errorf("Error fetching ships: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var result apiResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Println("❌ Error decoding API response:", err)
+		logger.Logger.Errorf("Error decoding API response: %v", err)
 		return nil, err
 	}
 
@@ -70,13 +69,13 @@ func ScrapeShips(shipType string) ([]models.Ship, error) {
 			}
 
 			if timestamp == "" {
-				log.Printf("⚠️ Missing timestamp for %s, skipping entry", item.VesselName)
+				logger.Logger.Warnf("Missing timestamp for vessel: %s", item.VesselName)
 				continue
 			}
 
 			parsedTime, err := time.Parse("2006-01-02 15:04:05.000", timestamp)
 			if err != nil {
-				log.Printf("❌ Error parsing time for %s (%s): %v", item.VesselName, timestamp, err)
+				logger.Logger.Errorf("Error parsing time for vessel %s, timestamp %s: %v", item.VesselName, timestamp, err)
 				continue
 			}
 
@@ -94,7 +93,7 @@ func ScrapeShips(shipType string) ([]models.Ship, error) {
 		}
 	}
 
-	// Handle "all" by processing each category
+	// Handle "all" by processing each category.
 	if shipType == "all" {
 		processShips(result.InPort, "inport")
 		processShips(result.Arrivals, "arrivals")
@@ -117,6 +116,6 @@ func ScrapeShips(shipType string) ([]models.Ship, error) {
 		processShips(shipList, shipType)
 	}
 
-	log.Printf("✅ Retrieved %d %s from API\n", len(ships), shipType)
+	logger.Logger.Infof("Retrieved ships from API, count: %d, shipType: %s", len(ships), shipType)
 	return ships, nil
 }

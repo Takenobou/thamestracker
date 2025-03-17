@@ -2,27 +2,27 @@ package bridge
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/Takenobou/thamestracker/config"
+	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/models"
 	"github.com/gocolly/colly"
 )
 
-// ScrapeBridgeLifts fetches upcoming bridge lift times
+// ScrapeBridgeLifts fetches upcoming bridge lift times.
 func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 	baseURL := config.AppConfig.URLs.TowerBridge
 	if baseURL == "" {
-		log.Println("❌ Error: Tower Bridge URL is missing from config")
+		logger.Logger.Errorf("Tower Bridge URL is missing from config")
 		return nil, fmt.Errorf("missing Tower Bridge URL")
 	}
-	log.Printf("🔹 Fetching Tower Bridge lifts from %s\n", baseURL)
+	logger.Logger.Infof("Fetching Tower Bridge lifts, url: %s", baseURL)
 
 	c := colly.NewCollector()
 	var lifts []models.BridgeLift
 
-	// Scrape lift data
+	// Scrape lift data.
 	c.OnHTML("tbody tr", func(e *colly.HTMLElement) {
 		lift := models.BridgeLift{
 			Date:      e.ChildAttr("td:nth-child(2) time", "datetime"),
@@ -31,41 +31,41 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 			Direction: strings.TrimSpace(e.ChildText("td:nth-child(5)")),
 		}
 
-		// Format Date & Time
+		// Format Date & Time.
 		if lift.Date != "" {
-			lift.Date = lift.Date[:10] // Keep only YYYY-MM-DD
+			lift.Date = lift.Date[:10] // Keep only YYYY-MM-DD.
 		} else {
-			log.Println("⚠️ Missing date in a bridge lift row")
+			logger.Logger.Warnf("Missing date in a bridge lift row")
 		}
 		if lift.Time != "" {
-			lift.Time = lift.Time[11:16] // Extract HH:MM
+			lift.Time = lift.Time[11:16] // Extract HH:MM.
 		} else {
-			log.Printf("⚠️ Missing time for vessel %s", lift.Vessel)
+			logger.Logger.Warnf("Missing time for vessel: %s", lift.Vessel)
 		}
 
-		log.Printf("📌 Found lift: Vessel=%s, Date=%s, Time=%s, Direction=%s",
+		logger.Logger.Infof("Found lift: vessel: %s, date: %s, time: %s, direction: %s",
 			lift.Vessel, lift.Date, lift.Time, lift.Direction)
 		lifts = append(lifts, lift)
 	})
 
-	// Handle pagination
+	// Handle pagination.
 	c.OnHTML("nav.pager a[title='Current page']", func(e *colly.HTMLElement) {
 		nextPage := e.DOM.Parent().Next().Find("a").AttrOr("href", "")
 		if nextPage != "" {
 			nextURL := fmt.Sprintf("%s%s", baseURL, nextPage)
-			log.Println("🔄 Scraping next page:", nextURL)
+			logger.Logger.Infof("Scraping next page, url: %s", nextURL)
 			c.Visit(nextURL)
 		}
 	})
 
-	// Start scraping
+	// Start scraping.
 	err := c.Visit(baseURL)
 	if err != nil {
-		log.Println("❌ Error scraping Tower Bridge lifts:", err)
+		logger.Logger.Errorf("Error scraping Tower Bridge lifts: %v", err)
 		return nil, err
 	}
 
 	c.Wait()
-	log.Printf("✅ Retrieved %d bridge lifts from API\n", len(lifts))
+	logger.Logger.Infof("Retrieved bridge lifts from API, count: %d", len(lifts))
 	return lifts, nil
 }

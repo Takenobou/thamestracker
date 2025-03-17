@@ -2,14 +2,13 @@ package api
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
+	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/helpers/utils"
 	"github.com/Takenobou/thamestracker/internal/models"
 	"github.com/Takenobou/thamestracker/internal/service"
-
 	ics "github.com/arran4/golang-ical"
 	"github.com/gofiber/fiber/v2"
 )
@@ -26,7 +25,7 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
 	lifts, err := h.svc.GetBridgeLifts()
 	if err != nil {
-		log.Println("Error fetching bridge lifts:", err)
+		logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve bridge lift data"})
 	}
 	// Apply unique filtering if requested.
@@ -41,7 +40,7 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 				filtered = append(filtered, lift)
 			}
 		}
-		// Recast to []models.BridgeLift (you may need to adjust this based on your types)
+		// Recast to []models.BridgeLift.
 		lifts = make([]models.BridgeLift, len(filtered))
 		for i, v := range filtered {
 			lifts[i] = v.(models.BridgeLift)
@@ -54,7 +53,7 @@ func (h *APIHandler) GetShips(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
 	ships, err := h.svc.GetShips(opts.ShipType)
 	if err != nil {
-		log.Println("Error fetching ship data:", err)
+		logger.Logger.Errorf("Error fetching ship data: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve ship data"})
 	}
 	ships = utils.FilterShips(ships, c)
@@ -68,11 +67,11 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 	cal.SetProductId("-//ThamesTracker//EN")
 	now := time.Now()
 
-	// Bridge events in the calendar
+	// Bridge events in the calendar.
 	if opts.EventType == "all" || opts.EventType == "bridge" {
 		lifts, err := h.svc.GetBridgeLifts()
 		if err != nil {
-			log.Println("Error fetching bridge lifts:", err)
+			logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
 		} else {
 			if opts.Unique {
 				lifts = utils.FilterUniqueLifts(lifts, 4)
@@ -84,7 +83,7 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 				}
 				start, err := time.Parse("2006-01-02 15:04", lift.Date+" "+lift.Time)
 				if err != nil {
-					log.Printf("Error parsing bridge lift time for %s: %v", lift.Vessel, err)
+					logger.Logger.Errorf("Error parsing bridge lift time for vessel %s: %v", lift.Vessel, err)
 					continue
 				}
 				end := start.Add(10 * time.Minute)
@@ -102,11 +101,11 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	// Ship events in the calendar
+	// Ship events in the calendar.
 	if opts.EventType == "all" || opts.EventType == "ship" {
 		ships, err := h.svc.GetShips("inport")
 		if err != nil {
-			log.Println("Error fetching ship data:", err)
+			logger.Logger.Errorf("Error fetching ship data: %v", err)
 		} else {
 			for i, ship := range ships {
 				if opts.Location != "" {
@@ -118,7 +117,7 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 				// Parse original arrival time.
 				originalArrival, err := time.Parse("02/01/2006 15:04", ship.Date+" "+ship.Time)
 				if err != nil {
-					log.Printf("Error parsing ship time for %s: %v", ship.Name, err)
+					logger.Logger.Errorf("Error parsing ship time for %s: %v", ship.Name, err)
 					continue
 				}
 				// Override the event start to today's date, preserving time-of-day.

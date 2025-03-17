@@ -1,13 +1,12 @@
 package cache
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
-	"context"
-
+	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -39,7 +38,7 @@ func (r *RedisCache) Set(key string, value interface{}, ttl time.Duration) error
 	if err != nil {
 		return err
 	}
-	fmt.Println("Saving data to Redis:", key)
+	logger.Logger.Infof("Saving data to Redis, key: %s", key)
 	return r.client.Set(r.ctx, key, jsonData, ttl).Err()
 }
 
@@ -47,9 +46,9 @@ func (r *RedisCache) Set(key string, value interface{}, ttl time.Duration) error
 func (r *RedisCache) Get(key string, dest interface{}) error {
 	data, err := r.client.Get(r.ctx, key).Result()
 	if err != nil {
-		fmt.Println("Redis cache miss ❌:", err)
+		logger.Logger.Warnf("Redis cache miss, key: %s, error: %v", key, err)
 		return errors.New("cache miss")
 	}
-	fmt.Println("Cache hit ✅, returning data from Redis")
+	logger.Logger.Infof("Cache hit, key: %s", key)
 	return json.Unmarshal([]byte(data), dest)
 }

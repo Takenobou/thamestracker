@@ -1,9 +1,8 @@
 package config
 
 import (
-	"log"
-
 	"github.com/BurntSushi/toml"
+	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 )
 
 // Config structure
@@ -24,10 +23,11 @@ var AppConfig Config
 
 func LoadConfig() {
 	if _, err := toml.DecodeFile("config/config.toml", &AppConfig); err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		logger.Logger.Errorf("Failed to load config: %v", err)
+		panic(err)
 	}
-	log.Println("Configuration loaded successfully ✅")
-	log.Printf("Port of London API URL: %s", AppConfig.URLs.PortOfLondon)
-	log.Printf("Tower Bridge URL: %s", AppConfig.URLs.TowerBridge)
-	log.Printf("Redis Adress: %s", AppConfig.Redis.Address)
+	logger.Logger.Infof("Configuration loaded successfully")
+	logger.Logger.Infof("Port of London API URL: %s", AppConfig.URLs.PortOfLondon)
+	logger.Logger.Infof("Tower Bridge URL: %s", AppConfig.URLs.TowerBridge)
+	logger.Logger.Infof("Redis Address: %s", AppConfig.Redis.Address)
 }
