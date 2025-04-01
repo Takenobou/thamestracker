@@ -23,8 +23,8 @@ var AppConfig Config
 
 func LoadConfig() {
 	AppConfig.Server.Port = 8080
-	AppConfig.URLs.PortOfLondon = "https://api.portoflondon.example.com"
-	AppConfig.URLs.TowerBridge = "https://towerbridge.example.com"
+	AppConfig.URLs.PortOfLondon = "https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists"
+	AppConfig.URLs.TowerBridge = "https://www.towerbridge.org.uk/lift-times"
 	AppConfig.Redis.Address = "localhost:6379"
 
 	if portStr := os.Getenv("PORT"); portStr != "" {

@@ -1,9 +1,0 @@
-[server]
-port = 3000
-
-[urls]
-port_of_london = "https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists"
-tower_bridge = "https://www.towerbridge.org.uk/lift-times"
-
-[redis]
-address = "localhost:6379"
