@@ -28,7 +28,6 @@
    REDIS_ADDRESS=localhost:6379
    ```
 
-
 3. **Install dependencies:**
 
    ```bash
@@ -86,6 +85,43 @@ The project also provides command line utilities for scraping data:
   ```bash
     go run ./cmd/scraper/main.go forecast
   ```
+
+## Deployment with Docker
+
+You can deploy ThamesTracker using Docker Compose. The `docker-compose.yml` file is included in the repository and defines both services.
+
+### Example `docker-compose.yml`:
+
+```yaml
+services:
+  thamestracker:
+    container_name: thamestracker
+    image: ghcr.io/takenobou/thamestracker:latest
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - REDIS_ADDRESS=redis:6379
+    depends_on:
+      - redis
+
+  redis:
+    container_name: thamestracker-redis
+    image: redis:latest
+    restart: always
+    ports:
+      - "6379:6379"
+```
+
+### Running the services
+
+1. Start the services using Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+
+2. Visit `http://localhost:8080` to access ThamesTracker.
 
 ## API Endpoints
 
