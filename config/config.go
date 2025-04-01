@@ -1,33 +1,41 @@
 package config
 
 import (
-	"github.com/BurntSushi/toml"
-	"github.com/Takenobou/thamestracker/internal/helpers/logger"
+	"log"
+	"os"
+	"strconv"
 )
 
-// Config structure
 type Config struct {
 	Server struct {
-		Port int `toml:"port"`
-	} `toml:"server"`
+		Port int
+	}
 	URLs struct {
-		PortOfLondon string `toml:"port_of_london"`
-		TowerBridge  string `toml:"tower_bridge"`
-	} `toml:"urls"`
+		PortOfLondon string
+		TowerBridge  string
+	}
 	Redis struct {
-		Address string `toml:"address"`
-	} `toml:"redis"`
+		Address string
+	}
 }
 
 var AppConfig Config
 
 func LoadConfig() {
-	if _, err := toml.DecodeFile("config/config.toml", &AppConfig); err != nil {
-		logger.Logger.Errorf("Failed to load config: %v", err)
-		panic(err)
+	AppConfig.Server.Port = 8080
+	AppConfig.URLs.PortOfLondon = "https://api.portoflondon.example.com"
+	AppConfig.URLs.TowerBridge = "https://towerbridge.example.com"
+	AppConfig.Redis.Address = "localhost:6379"
+
+	if portStr := os.Getenv("PORT"); portStr != "" {
+		if port, err := strconv.Atoi(portStr); err == nil {
+			AppConfig.Server.Port = port
+		} else {
+			log.Printf("Invalid PORT environment variable: %s", portStr)
+		}
 	}
-	logger.Logger.Infof("Configuration loaded successfully")
-	logger.Logger.Infof("Port of London API URL: %s", AppConfig.URLs.PortOfLondon)
-	logger.Logger.Infof("Tower Bridge URL: %s", AppConfig.URLs.TowerBridge)
-	logger.Logger.Infof("Redis Address: %s", AppConfig.Redis.Address)
+
+	if redisAddr := os.Getenv("REDIS_ADDRESS"); redisAddr != "" {
+		AppConfig.Redis.Address = redisAddr
+	}
 }
