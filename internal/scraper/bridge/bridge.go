@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -54,9 +55,23 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 	c.OnHTML("nav.pager a[title='Current page']", func(e *colly.HTMLElement) {
 		nextPage := e.DOM.Parent().Next().Find("a").AttrOr("href", "")
 		if nextPage != "" {
-			nextURL := fmt.Sprintf("%s%s", baseURL, nextPage)
-			logger.Logger.Infof("Scraping next page, url: %s", nextURL)
-			c.Visit(nextURL)
+			baseParsed, err := url.Parse(baseURL)
+			if err != nil {
+				return
+			}
+			nextParsed, err := url.Parse(nextPage)
+			if err != nil {
+				return
+			}
+			// If absolute URL, ensure same host
+			if nextParsed.IsAbs() && nextParsed.Host != baseParsed.Host {
+				logger.Logger.Warnf("Skipping external next page URL: %s", nextParsed)
+				return
+			}
+			// Resolve relative URL
+			safeURL := baseParsed.ResolveReference(nextParsed).String()
+			logger.Logger.Infof("Scraping next page, url: %s", safeURL)
+			c.Visit(safeURL)
 		}
 	})
 

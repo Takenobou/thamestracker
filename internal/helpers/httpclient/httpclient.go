@@ -10,5 +10,11 @@ type Client interface {
 }
 
 var DefaultClient Client = &http.Client{
-	Timeout: 10 * time.Second,
+	Timeout: 15 * time.Second,
+	Transport: &http.Transport{
+		IdleConnTimeout:     30 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+	},
 }
