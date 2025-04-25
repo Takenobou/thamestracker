@@ -3,6 +3,7 @@ package bridge
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Takenobou/thamestracker/internal/config"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
@@ -24,23 +25,24 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 
 	// Scrape lift data.
 	c.OnHTML("tbody tr", func(e *colly.HTMLElement) {
+		rawTime := e.ChildAttr("td:nth-child(3) time", "datetime")
+		if rawTime == "" {
+			logger.Logger.Warnf("Missing datetime for vessel row, skipping")
+			return
+		}
+		tParsed, err := time.Parse(time.RFC3339, rawTime)
+		if err != nil {
+			logger.Logger.Errorf("Error parsing datetime %s: %v", rawTime, err)
+			return
+		}
+		loc, _ := time.LoadLocation("Europe/London")
+		tLondon := tParsed.In(loc)
+
 		lift := models.BridgeLift{
-			Date:      e.ChildAttr("td:nth-child(2) time", "datetime"),
-			Time:      e.ChildAttr("td:nth-child(3) time", "datetime"),
+			Date:      tLondon.Format("2006-01-02"),
+			Time:      tLondon.Format("15:04"),
 			Vessel:    strings.TrimSpace(e.ChildText("td:nth-child(4)")),
 			Direction: strings.TrimSpace(e.ChildText("td:nth-child(5)")),
-		}
-
-		// Format Date & Time.
-		if lift.Date != "" {
-			lift.Date = lift.Date[:10] // Keep only YYYY-MM-DD.
-		} else {
-			logger.Logger.Warnf("Missing date in a bridge lift row")
-		}
-		if lift.Time != "" {
-			lift.Time = lift.Time[11:16] // Extract HH:MM.
-		} else {
-			logger.Logger.Warnf("Missing time for vessel: %s", lift.Vessel)
 		}
 
 		logger.Logger.Infof("Found lift: vessel: %s, date: %s, time: %s, direction: %s",

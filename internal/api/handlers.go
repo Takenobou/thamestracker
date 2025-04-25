@@ -101,7 +101,7 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 				event.SetEndAt(end)
 				event.SetSummary(fmt.Sprintf("Tower Bridge Lift: %s", lift.Vessel))
 				event.SetDescription(fmt.Sprintf("Direction: %s", lift.Direction))
-				event.SetLocation("Tower Bridge\n222 Tower Bridge Road, London, SE1 2UP, England")
+				event.SetLocation("Tower Bridge\\n222 Tower Bridge Road, London, SE1 2UP, England")
 			}
 		}
 	}

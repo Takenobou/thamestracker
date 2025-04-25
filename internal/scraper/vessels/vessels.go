@@ -58,30 +58,41 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 	// Helper function to process vessel data from a given category.
 	processVessels := func(vesselList []vesselData, category string) {
 		for _, item := range vesselList {
-			var timestamp string
-			switch category {
-			case "departures":
-				timestamp = item.FirstRepDT
-			case "forecast":
-				timestamp = item.ETADate
-			default:
-				timestamp = item.LastRepDT
+			if item.VesselName == "" {
+				logger.Logger.Warnf("Missing vessel name in category %s, skipping", category)
+				continue
 			}
-
-			if timestamp == "" {
-				logger.Logger.Warnf("Missing timestamp for vessel: %s. Using current time as fallback.", item.VesselName)
-				timestamp = time.Now().Format("2006-01-02 15:04:05.000")
-			}
-
-			parsedTime, err := time.Parse("2006-01-02 15:04:05.000", timestamp)
-			if err != nil {
-				logger.Logger.Errorf("Error parsing time for vessel %s, timestamp %s: %v", item.VesselName, timestamp, err)
+			if item.Visit == "" {
+				logger.Logger.Warnf("Missing voyage number for vessel %s, skipping", item.VesselName)
 				continue
 			}
 
+			var ts string
+			switch category {
+			case "departures":
+				ts = item.FirstRepDT
+			case "forecast":
+				ts = item.ETADate
+			default:
+				ts = item.LastRepDT
+			}
+			if ts == "" {
+				logger.Logger.Warnf("Missing timestamp for vessel %s, using now()", item.VesselName)
+				ts = time.Now().Format("2006-01-02 15:04:05.000")
+			}
+
+			// parse in UTC then convert
+			parsedUTC, err := time.ParseInLocation("2006-01-02 15:04:05.000", ts, time.UTC)
+			if err != nil {
+				logger.Logger.Errorf("Error parsing time %s for vessel %s: %v", ts, item.VesselName, err)
+				continue
+			}
+			loc, _ := time.LoadLocation("Europe/London")
+			local := parsedUTC.In(loc)
+
 			vessels = append(vessels, models.Vessel{
-				Time:         parsedTime.Format("15:04"),
-				Date:         parsedTime.Format("02/01/2006"),
+				Time:         local.Format("15:04"),
+				Date:         local.Format("02/01/2006"),
 				LocationFrom: item.LocationFrom,
 				LocationTo:   item.LocationTo,
 				LocationName: item.LocationName,
