@@ -15,6 +15,7 @@ import (
 type ServiceInterface interface {
 	GetBridgeLifts() ([]models.BridgeLift, error)
 	GetVessels(vesselType string) ([]models.Vessel, error)
+	HealthCheck() error
 }
 
 type APIHandler struct {
@@ -165,4 +166,12 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 
 	c.Set("Content-Type", "text/calendar")
 	return c.SendString(cal.Serialize())
+}
+
+// Healthz returns 200 OK if dependencies are healthy, 503 otherwise.
+func (h *APIHandler) Healthz(c *fiber.Ctx) error {
+	if err := h.svc.HealthCheck(); err != nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"status": "fail", "error": err.Error()})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
 }

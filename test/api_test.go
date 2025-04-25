@@ -27,6 +27,9 @@ func (f fakeService) GetVessels(vesselType string) ([]models.Vessel, error) {
 	}, nil
 }
 
+// Add HealthCheck to fakeService for healthz endpoint testing
+func (f fakeService) HealthCheck() error { return nil }
+
 func TestGetBridgeLiftsEndpoint(t *testing.T) {
 	svc := fakeService{}
 	handler := api.NewAPIHandler(svc)

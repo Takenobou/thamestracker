@@ -1,15 +1,19 @@
 package service
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/Takenobou/thamestracker/internal/config"
 	"github.com/Takenobou/thamestracker/internal/helpers/cache"
 	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/models"
 	bridgeScraper "github.com/Takenobou/thamestracker/internal/scraper/bridge"
 	vesselScraper "github.com/Takenobou/thamestracker/internal/scraper/vessels"
+	"github.com/redis/go-redis/v9"
 )
 
 type Service struct {
@@ -64,4 +68,22 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 		}
 	}
 	return vessels, nil
+}
+
+func (s *Service) HealthCheck() error {
+	// Ping Redis
+	rdb := redis.NewClient(&redis.Options{Addr: config.AppConfig.Redis.Address})
+	if err := rdb.Ping(context.Background()).Err(); err != nil {
+		return fmt.Errorf("redis ping failed: %w", err)
+	}
+	// Check Port of London API with GET (HEAD not supported by client interface)
+	resp, err := s.HTTPClient.Get(config.AppConfig.URLs.PortOfLondon)
+	if err != nil {
+		return fmt.Errorf("external API GET failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("external API returned status %d", resp.StatusCode)
+	}
+	return nil
 }
