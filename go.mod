@@ -2,10 +2,7 @@ module github.com/Takenobou/thamestracker
 
 go 1.24.0
 
-require (
-	github.com/BurntSushi/toml v1.5.0
-	github.com/gofiber/fiber/v2 v2.52.6
-)
+require github.com/gofiber/fiber/v2 v2.52.6
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.2 // indirect

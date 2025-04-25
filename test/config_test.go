@@ -2,7 +2,6 @@ package test
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/Takenobou/thamestracker/internal/config"
@@ -10,45 +9,21 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	// Create a temporary directory.
-	tmpDir, err := os.MkdirTemp("", "configtest")
+	// Set environment variables
+	err := os.Setenv("PORT", "9090")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	// Create a "config" subdirectory.
-	configDir := filepath.Join(tmpDir, "config")
-	err = os.Mkdir(configDir, 0755)
+	err = os.Setenv("PORT_OF_LONDON", "http://fake.london")
 	assert.NoError(t, err)
-
-	// Create a temporary config file.
-	configFilePath := filepath.Join(configDir, "config.toml")
-	testConfig := `
-[server]
-port = 8080
-
-[urls]
-port_of_london = "http://fake.london"
-tower_bridge = "http://fake.bridge"
-
-[redis]
-address = "localhost:6379"
-`
-	err = os.WriteFile(configFilePath, []byte(testConfig), 0644)
+	err = os.Setenv("TOWER_BRIDGE", "http://fake.bridge")
+	assert.NoError(t, err)
+	err = os.Setenv("REDIS_ADDRESS", "redis://localhost:6380")
 	assert.NoError(t, err)
 
-	// Change working directory to the temporary directory.
-	originalWD, err := os.Getwd()
-	assert.NoError(t, err)
-	err = os.Chdir(tmpDir)
-	assert.NoError(t, err)
-	defer os.Chdir(originalWD)
-
-	// Call LoadConfig (which expects to find config/config.toml).
+	// Load config from env
 	config.LoadConfig()
 
-	// Verify that the configuration values were loaded correctly.
-	assert.Equal(t, 8080, config.AppConfig.Server.Port)
+	assert.Equal(t, 9090, config.AppConfig.Server.Port)
 	assert.Equal(t, "http://fake.london", config.AppConfig.URLs.PortOfLondon)
 	assert.Equal(t, "http://fake.bridge", config.AppConfig.URLs.TowerBridge)
-	assert.Equal(t, "localhost:6379", config.AppConfig.Redis.Address)
+	assert.Equal(t, "redis://localhost:6380", config.AppConfig.Redis.Address)
 }

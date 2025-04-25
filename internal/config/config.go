@@ -1,11 +1,8 @@
 package config
 
 import (
-	"log"
 	"os"
 	"strconv"
-
-	"github.com/BurntSushi/toml"
 )
 
 type Config struct {
@@ -30,23 +27,18 @@ func LoadConfig() {
 	AppConfig.URLs.TowerBridge = "https://www.towerbridge.org.uk/lift-times"
 	AppConfig.Redis.Address = "localhost:6379"
 
-	// Load configuration from file if it exists
-	configPath := "config/config.toml"
-	if _, err := os.Stat(configPath); err == nil {
-		if _, err := toml.DecodeFile(configPath, &AppConfig); err != nil {
-			log.Printf("Error parsing config file: %v", err)
-		}
-	}
-
 	// Override with environment variables
 	if portStr := os.Getenv("PORT"); portStr != "" {
 		if port, err := strconv.Atoi(portStr); err == nil {
 			AppConfig.Server.Port = port
-		} else {
-			log.Printf("Invalid PORT environment variable: %s", portStr)
 		}
 	}
-
+	if poLondon := os.Getenv("PORT_OF_LONDON"); poLondon != "" {
+		AppConfig.URLs.PortOfLondon = poLondon
+	}
+	if tb := os.Getenv("TOWER_BRIDGE"); tb != "" {
+		AppConfig.URLs.TowerBridge = tb
+	}
 	if redisAddr := os.Getenv("REDIS_ADDRESS"); redisAddr != "" {
 		AppConfig.Redis.Address = redisAddr
 	}
