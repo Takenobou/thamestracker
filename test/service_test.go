@@ -98,7 +98,8 @@ func TestService_GetBridgeLifts_CacheMiss(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, lifts, 1)
 	assert.Equal(t, "2025-04-05", lifts[0].Date)
-	assert.Equal(t, "17:45", lifts[0].Time)
+	// Expected local London time (UTC->BST): raw 17:45Z becomes 18:45 local
+	assert.Equal(t, "18:45", lifts[0].Time)
 
 	// Verify that the cache now contains the value.
 	var cachedLifts []models.BridgeLift
