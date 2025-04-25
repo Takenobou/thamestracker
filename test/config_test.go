@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Takenobou/thamestracker/config"
+	"github.com/Takenobou/thamestracker/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Takenobou/thamestracker/config"
+	"github.com/Takenobou/thamestracker/internal/config"
 	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
 	"github.com/Takenobou/thamestracker/internal/models"
 	"github.com/Takenobou/thamestracker/internal/service"

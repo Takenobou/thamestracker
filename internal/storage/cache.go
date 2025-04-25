@@ -3,7 +3,7 @@ package storage
 import (
 	"time"
 
-	"github.com/Takenobou/thamestracker/config"
+	"github.com/Takenobou/thamestracker/internal/config"
 	"github.com/Takenobou/thamestracker/internal/helpers/cache"
 )
 
