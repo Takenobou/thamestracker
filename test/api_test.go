@@ -2,6 +2,7 @@ package test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,6 +30,13 @@ func (f fakeService) GetVessels(vesselType string) ([]models.Vessel, error) {
 
 // Add HealthCheck to fakeService for healthz endpoint testing
 func (f fakeService) HealthCheck() error { return nil }
+
+// failingService implements ServiceInterface with a failing HealthCheck.
+type failingService struct{}
+
+func (f failingService) GetBridgeLifts() ([]models.BridgeLift, error)          { return nil, nil }
+func (f failingService) GetVessels(vesselType string) ([]models.Vessel, error) { return nil, nil }
+func (f failingService) HealthCheck() error                                    { return fmt.Errorf("unhealthy") }
 
 func TestGetBridgeLiftsEndpoint(t *testing.T) {
 	svc := fakeService{}
@@ -81,4 +89,39 @@ func TestCalendarEndpoint(t *testing.T) {
 	n, _ := resp.Body.Read(buf)
 	body := string(buf[:n])
 	assert.Contains(t, body, "BEGIN:VCALENDAR")
+}
+
+func TestHealthzEndpoint_Success(t *testing.T) {
+	svc := fakeService{}
+	handler := api.NewAPIHandler(svc)
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]string
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.Equal(t, "ok", result["status"])
+}
+
+func TestHealthzEndpoint_Failure(t *testing.T) {
+	svc := failingService{}
+	handler := api.NewAPIHandler(svc)
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+
+	var result map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	assert.NoError(t, err)
+	assert.Equal(t, "fail", result["status"])
+	assert.Contains(t, result["error"], "unhealthy")
 }

@@ -51,8 +51,17 @@ func (s *Service) getBridgeLiftsFromScraper() ([]models.BridgeLift, error) {
 }
 
 func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
+	// Validate vesselType to prevent cache-key injection
+	vt := strings.ToLower(vesselType)
+	switch vt {
+	case "inport", "arrivals", "departures", "forecast", "all":
+		// valid
+	default:
+		return nil, fmt.Errorf("invalid vesselType: %s", vesselType)
+	}
+	vesselType = vt
 	var vessels []models.Vessel
-	cacheKey := "vessels_" + strings.ToLower(vesselType)
+	cacheKey := "vessels_" + vesselType
 	if vesselType == "all" {
 		cacheKey = "all_vessels"
 	}

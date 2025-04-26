@@ -3,6 +3,7 @@ package vessels
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/Takenobou/thamestracker/internal/config"
@@ -40,9 +41,24 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 		return nil, fmt.Errorf("missing api url")
 	}
 	logger.Logger.Infof("Fetching vessels from API, url: %s, vesselType: %s", apiURL, vesselType)
-	resp, err := httpclient.DefaultClient.Get(apiURL)
+
+	var resp *http.Response
+	var err error
+	const maxRetries = 3
+	// Exponential backoff retries
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		resp, err = httpclient.DefaultClient.Get(apiURL)
+		if err == nil && resp.StatusCode < http.StatusInternalServerError {
+			break
+		}
+		logger.Logger.Warnf("Fetch attempt %d failed: %v, status: %v", attempt, err, resp)
+		if resp != nil {
+			resp.Body.Close()
+		}
+		time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+	}
 	if err != nil {
-		logger.Logger.Errorf("Error fetching vessels: %v", err)
+		logger.Logger.Errorf("Error fetching vessels after %d attempts: %v", maxRetries, err)
 		return nil, err
 	}
 	defer resp.Body.Close()
