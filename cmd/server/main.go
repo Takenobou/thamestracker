@@ -28,6 +28,8 @@ func main() {
 	handler := api.NewAPIHandler(svc)
 
 	app := fiber.New()
+	// structured request logging middleware
+	app.Use(logger.RequestLogger())
 	api.SetupRoutes(app, handler)
 
 	serverAddr := fmt.Sprintf(":%d", config.AppConfig.Server.Port)

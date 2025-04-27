@@ -10,9 +10,11 @@ import (
 	"github.com/Takenobou/thamestracker/internal/helpers/cache"
 	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
+	"github.com/Takenobou/thamestracker/internal/helpers/metrics"
 	"github.com/Takenobou/thamestracker/internal/models"
 	bridgeScraper "github.com/Takenobou/thamestracker/internal/scraper/bridge"
 	vesselScraper "github.com/Takenobou/thamestracker/internal/scraper/vessels"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -31,8 +33,15 @@ func NewService(httpClient httpclient.Client, cache cache.Cache) *Service {
 func (s *Service) GetBridgeLifts() ([]models.BridgeLift, error) {
 	var lifts []models.BridgeLift
 	const key = "bridge_lifts"
+	// try cache
 	if err := s.Cache.Get(key, &lifts); err != nil {
+		// cache miss
+		metrics.CacheMisses.Inc()
+		// record scrape metrics
+		timer := prometheus.NewTimer(metrics.ScrapeDuration.WithLabelValues("bridge"))
+		metrics.ScrapeCounter.WithLabelValues("bridge").Inc()
 		l, err2 := s.getBridgeLiftsFromScraper()
+		timer.ObserveDuration()
 		if err2 != nil {
 			return nil, err2
 		}
@@ -41,6 +50,9 @@ func (s *Service) GetBridgeLifts() ([]models.BridgeLift, error) {
 			logger.Logger.Errorf("Failed to cache bridge_lifts: %v", err3)
 			return nil, err3
 		}
+	} else {
+		// cache hit
+		metrics.CacheHits.Inc()
 	}
 	return lifts, nil
 }
@@ -66,7 +78,13 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 		cacheKey = "all_vessels"
 	}
 	if err := s.Cache.Get(cacheKey, &vessels); err != nil {
+		// cache miss
+		metrics.CacheMisses.Inc()
+		// record scrape metrics
+		timer := prometheus.NewTimer(metrics.ScrapeDuration.WithLabelValues("vessels"))
+		metrics.ScrapeCounter.WithLabelValues("vessels").Inc()
 		data, err2 := vesselScraper.ScrapeVessels(vesselType)
+		timer.ObserveDuration()
 		if err2 != nil {
 			return nil, err2
 		}
@@ -75,6 +93,9 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 			logger.Logger.Errorf("Failed to cache %s: %v", cacheKey, err3)
 			return nil, err3
 		}
+	} else {
+		// cache hit
+		metrics.CacheHits.Inc()
 	}
 	return vessels, nil
 }
