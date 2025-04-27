@@ -59,7 +59,7 @@ func (s *Service) GetBridgeLifts() ([]models.BridgeLift, error) {
 
 func (s *Service) getBridgeLiftsFromScraper() ([]models.BridgeLift, error) {
 	// Separate helper if needed; here we call the scraper directly.
-	return bridgeScraper.ScrapeBridgeLifts() // Assuming bridge lifts remain in the bridge package.
+	return bridgeScraper.ScrapeBridgeLifts()
 }
 
 func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {

@@ -24,6 +24,20 @@ func FilterUniqueLifts(lifts []models.BridgeLift, threshold int) []models.Bridge
 	return uniqueLifts
 }
 
+// FilterBridgeLiftsByName filters bridge lifts where Vessel contains the given lowercase substring.
+func FilterBridgeLiftsByName(lifts []models.BridgeLift, name string) []models.BridgeLift {
+	if name == "" {
+		return lifts
+	}
+	var result []models.BridgeLift
+	for _, lift := range lifts {
+		if strings.Contains(strings.ToLower(lift.Vessel), name) {
+			result = append(result, lift)
+		}
+	}
+	return result
+}
+
 // FilterVessels applies various query filters on a list of vessels.
 func FilterVessels(vessels []models.Vessel, c *fiber.Ctx) []models.Vessel {
 	nameFilter := strings.ToLower(c.Query("name", ""))

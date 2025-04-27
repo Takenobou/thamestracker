@@ -37,16 +37,8 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 	if opts.Unique {
 		lifts = utils.FilterUniqueLifts(lifts, 4)
 	}
-	// Additional name filtering (using vessel name) if specified.
-	if name := strings.ToLower(c.Query("name", "")); name != "" {
-		var filtered []models.BridgeLift
-		for _, lift := range lifts {
-			if strings.Contains(strings.ToLower(lift.Vessel), name) {
-				filtered = append(filtered, lift)
-			}
-		}
-		lifts = filtered
-	}
+	// Name filtering if specified.
+	lifts = utils.FilterBridgeLiftsByName(lifts, opts.Name)
 	return c.JSON(lifts)
 }
 
@@ -69,9 +61,7 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
 	// determine if any vessel-specific filters are applied
 	hasVesselFilter := opts.Unique || opts.VesselType != "all" ||
-		c.Query("name", "") != "" || c.Query("location", "") != "" ||
-		c.Query("nationality", "") != "" || c.Query("after", "") != "" ||
-		c.Query("before", "") != ""
+		opts.Name != "" || opts.Location != "" || opts.Nationality != "" || opts.After != "" || opts.Before != ""
 
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
@@ -87,11 +77,9 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 			if opts.Unique {
 				lifts = utils.FilterUniqueLifts(lifts, 4)
 			}
+			// Apply name filter
+			lifts = utils.FilterBridgeLiftsByName(lifts, opts.Name)
 			for i, lift := range lifts {
-				// Filter by name if provided.
-				if name := strings.ToLower(c.Query("name", "")); name != "" && !strings.Contains(strings.ToLower(lift.Vessel), name) {
-					continue
-				}
 				start, err := time.Parse("2006-01-02 15:04", lift.Date+" "+lift.Time)
 				if err != nil {
 					logger.Logger.Errorf("Error parsing bridge lift time for vessel %s: %v", lift.Vessel, err)
