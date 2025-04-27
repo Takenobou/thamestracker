@@ -129,7 +129,8 @@ Liveness probe. Returns HTTP 200 if Redis and external API are healthy, HTTP 5
 **Response**:
 ```json
 { "status": "ok" }
-``` or 
+```
+or 
 ```json
 { "status": "fail", "error": "health check error" }
 ```
