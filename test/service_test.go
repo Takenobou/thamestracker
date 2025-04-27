@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -173,4 +174,29 @@ func TestService_GetVessels_ErrorHandling(t *testing.T) {
 	svc := service.NewService(fakeClient, fc)
 	_, err := svc.GetVessels("inport")
 	assert.Error(t, err, "expected error when HTTP client fails")
+}
+
+// TestCircuitBreakerTrips verifies that after MaxFailures consecutive Get errors, the circuit breaker opens.
+func TestCircuitBreakerTrips(t *testing.T) {
+	// fake client that always fails
+	callCount := 0
+	fake := struct{ httpclient.Client }{}
+	fake.Client = httpclient.ClientFunc(func(url string) (*http.Response, error) {
+		callCount++
+		return nil, fmt.Errorf("network fail %d", callCount)
+	})
+	// small breaker: trips after 2 failures with 1s cool-off
+	breaker := httpclient.NewBreakerClient(fake, 2, 1)
+
+	// first two attempts: underlying called and errors
+	_, err := breaker.Get("test-url")
+	assert.Error(t, err)
+	_, err = breaker.Get("test-url")
+	assert.Error(t, err)
+	// third attempt: breaker is open, should not call underlying
+	prevCalls := callCount
+	_, err = breaker.Get("test-url")
+	assert.Error(t, err)
+	assert.True(t, callCount == prevCalls, "underlying client should not be called when breaker is open")
+	assert.Contains(t, err.Error(), "circuit breaker is open")
 }

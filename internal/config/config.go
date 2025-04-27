@@ -16,6 +16,10 @@ type Config struct {
 	Redis struct {
 		Address string `toml:"address"`
 	} `toml:"redis"`
+	CircuitBreaker struct {
+		MaxFailures    int `toml:"max_failures"`
+		CoolOffSeconds int `toml:"cool_off_seconds"`
+	} `toml:"circuit_breaker"`
 }
 
 var AppConfig Config
@@ -27,6 +31,9 @@ func NewConfig() Config {
 	cfg.URLs.PortOfLondon = "https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists"
 	cfg.URLs.TowerBridge = "https://www.towerbridge.org.uk/lift-times"
 	cfg.Redis.Address = "localhost:6379"
+	// circuit breaker defaults
+	cfg.CircuitBreaker.MaxFailures = 5
+	cfg.CircuitBreaker.CoolOffSeconds = 60
 
 	// overrides
 	if portStr := os.Getenv("PORT"); portStr != "" {
@@ -42,6 +49,16 @@ func NewConfig() Config {
 	}
 	if v := os.Getenv("REDIS_ADDRESS"); v != "" {
 		cfg.Redis.Address = v
+	}
+	if v := os.Getenv("CB_MAX_FAILURES"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			cfg.CircuitBreaker.MaxFailures = i
+		}
+	}
+	if v := os.Getenv("CB_COOL_OFF"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			cfg.CircuitBreaker.CoolOffSeconds = i
+		}
 	}
 
 	return cfg
