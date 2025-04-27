@@ -74,6 +74,13 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 
 	var vessels []models.Vessel
 
+	// load timezone location from config with error handling
+	loc, errLoc := time.LoadLocation(config.AppConfig.Timezone)
+	if errLoc != nil {
+		logger.Logger.Warnf("Could not load location %s: %v, defaulting to UTC", config.AppConfig.Timezone, errLoc)
+		loc = time.UTC
+	}
+
 	// Helper function to process vessel data from a given category.
 	processVessels := func(vesselList []vesselData, category string) {
 		for _, item := range vesselList {
@@ -107,7 +114,7 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 				logger.Logger.Errorf("Error parsing time %s for vessel %s: %v", ts, item.VesselName, err)
 				continue
 			}
-			loc, _ := time.LoadLocation("Europe/London")
+			// use preloaded location instead of reloading each time
 			local := parsedUTC.In(loc)
 
 			vessels = append(vessels, models.Vessel{
