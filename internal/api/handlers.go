@@ -14,6 +14,8 @@ import (
 	ics "github.com/arran4/golang-ical"
 	"github.com/gofiber/fiber/v2"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type ServiceInterface interface {
@@ -147,7 +149,20 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 
 					event.SetStartAt(start)
 					event.SetEndAt(end)
-					event.SetSummary(fmt.Sprintf("Vessel In Port: %s", vessel.Name))
+
+					// Differentiate summary based on vessel type
+					var prefix string
+					switch vessel.Type {
+					case "arrivals":
+						prefix = "Arrival"
+					case "departures":
+						prefix = "Departure"
+					case "forecast":
+						prefix = "Forecast"
+					default:
+						prefix = cases.Title(language.English).String(vessel.Type)
+					}
+					event.SetSummary(fmt.Sprintf("Vessel %s: %s", prefix, vessel.Name))
 				}
 
 				vesselLocation := vessel.LocationName
