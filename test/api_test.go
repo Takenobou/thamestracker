@@ -1,10 +1,12 @@
 package test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Takenobou/thamestracker/internal/api"
@@ -124,4 +126,39 @@ func TestHealthzEndpoint_Failure(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "fail", result["status"])
 	assert.Contains(t, result["error"], "unhealthy")
+}
+
+func TestVesselsJSONAndICACountParity(t *testing.T) {
+	svc := fakeService{}
+	handler := api.NewAPIHandler(svc)
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	// Define query parameters to test
+	queries := []string{
+		"?type=inport",
+		"?unique=true",
+		// add more combinations as needed
+	}
+	for _, q := range queries {
+		// JSON endpoint
+		reqJSON := httptest.NewRequest(http.MethodGet, "/vessels"+q, nil)
+		respJSON, err := app.Test(reqJSON)
+		assert.NoError(t, err)
+		var vessels []models.Vessel
+		err = json.NewDecoder(respJSON.Body).Decode(&vessels)
+		assert.NoError(t, err)
+		countJSON := len(vessels)
+
+		// ICS endpoint
+		reqICS := httptest.NewRequest(http.MethodGet, "/calendar.ics"+q, nil)
+		respICS, err := app.Test(reqICS)
+		assert.NoError(t, err)
+		buf := new(bytes.Buffer)
+		_, _ = buf.ReadFrom(respICS.Body)
+		icsBody := buf.String()
+		countICS := strings.Count(icsBody, "BEGIN:VEVENT")
+
+		assert.Equal(t, countJSON, countICS, fmt.Sprintf("mismatch for query '%s'", q))
+	}
 }

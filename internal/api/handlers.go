@@ -61,19 +61,29 @@ func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 		logger.Logger.Errorf("Error fetching vessel data: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve vessel data"})
 	}
-	vessels = utils.FilterVessels(vessels, c) // Ensure you update your filtering helper accordingly.
+	// Apply JSON endpoint filters: name, location, nationality, after, before
+	vessels = utils.FilterVessels(vessels, c)
+	if opts.Unique {
+		vessels = utils.FilterUniqueVessels(vessels)
+	}
 	return c.JSON(vessels)
 }
 
 func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
+	// determine if any vessel-specific filters are applied
+	hasVesselFilter := opts.Unique || opts.VesselType != "all" ||
+		c.Query("name", "") != "" || c.Query("location", "") != "" ||
+		c.Query("nationality", "") != "" || c.Query("after", "") != "" ||
+		c.Query("before", "") != ""
+
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetProductId("-//ThamesTracker//EN")
 	now := time.Now()
 
-	// Bridge events in the calendar.
-	if opts.EventType == "all" || opts.EventType == "bridge" {
+	// Bridge events in the calendar (only when no vessel filters)
+	if !hasVesselFilter && (opts.EventType == "all" || opts.EventType == "bridge") {
 		lifts, err := h.svc.GetBridgeLifts()
 		if err != nil {
 			logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
@@ -109,19 +119,17 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 
 	// Vessel events in the calendar.
 	if opts.EventType == "all" || opts.EventType == "vessel" {
-		vessels, err := h.svc.GetVessels("inport")
+		// Retrieve with requested vessel type
+		vessels, err := h.svc.GetVessels(opts.VesselType)
 		if err != nil {
 			logger.Logger.Errorf("Error fetching vessel data: %v", err)
 		} else {
+			// Apply calendar filters to match JSON behavior
+			vessels = utils.FilterVessels(vessels, c)
+			if opts.Unique {
+				vessels = utils.FilterUniqueVessels(vessels)
+			}
 			for i, vessel := range vessels {
-				// Optional location filter
-				if opts.Location != "" {
-					combinedLocation := strings.ToLower(vessel.LocationFrom + " " + vessel.LocationTo + " " + vessel.LocationName)
-					if !strings.Contains(combinedLocation, opts.Location) {
-						continue
-					}
-				}
-
 				eventID := fmt.Sprintf("vessel-%d@thamestracker", i)
 				event := cal.AddEvent(eventID)
 				event.SetCreatedTime(now)

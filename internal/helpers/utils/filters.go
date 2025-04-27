@@ -66,3 +66,16 @@ func FilterVessels(vessels []models.Vessel, c *fiber.Ctx) []models.Vessel {
 	}
 	return result
 }
+
+// FilterUniqueVessels de-duplicates vessel entries by name when unique=true.
+func FilterUniqueVessels(vessels []models.Vessel) []models.Vessel {
+	seen := make(map[string]bool)
+	var result []models.Vessel
+	for _, v := range vessels {
+		if !seen[v.Name] {
+			seen[v.Name] = true
+			result = append(result, v)
+		}
+	}
+	return result
+}
