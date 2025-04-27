@@ -11,6 +11,7 @@ import (
 
 	"github.com/Takenobou/thamestracker/internal/api"
 	"github.com/Takenobou/thamestracker/internal/models"
+	"github.com/Takenobou/thamestracker/internal/service"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 )
@@ -33,12 +34,23 @@ func (f fakeService) GetVessels(vesselType string) ([]models.Vessel, error) {
 // Add HealthCheck to fakeService for healthz endpoint testing
 func (f fakeService) HealthCheck() error { return nil }
 
+// Add ListLocations to fakeService
+func (f fakeService) ListLocations() ([]service.LocationStats, error) {
+	return []service.LocationStats{
+		{Name: "PortA", Code: "", Inport: 1, Arrivals: 2, Departures: 3, Total: 6},
+		{Name: "PortB", Code: "", Inport: 0, Arrivals: 1, Departures: 0, Total: 1},
+	}, nil
+}
+
 // failingService implements ServiceInterface with a failing HealthCheck.
 type failingService struct{}
 
 func (f failingService) GetBridgeLifts() ([]models.BridgeLift, error)          { return nil, nil }
 func (f failingService) GetVessels(vesselType string) ([]models.Vessel, error) { return nil, nil }
 func (f failingService) HealthCheck() error                                    { return fmt.Errorf("unhealthy") }
+func (f failingService) ListLocations() ([]service.LocationStats, error) {
+	return nil, fmt.Errorf("fail")
+}
 
 func TestGetBridgeLiftsEndpoint(t *testing.T) {
 	svc := fakeService{}
@@ -164,4 +176,48 @@ func TestVesselsJSONAndICACountParity(t *testing.T) {
 
 		assert.Equal(t, countJSON, countICS, fmt.Sprintf("mismatch for query '%s'", q))
 	}
+}
+
+// TestGetLocationsEndpoint tests the /locations endpoint with no filters.
+func TestGetLocationsEndpoint(t *testing.T) {
+	svc := fakeService{}
+	handler := api.NewAPIHandler(svc)
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/locations", nil)
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var locs []service.LocationStats
+	err = json.NewDecoder(resp.Body).Decode(&locs)
+	assert.NoError(t, err)
+	assert.Len(t, locs, 2)
+	assert.Equal(t, "PortA", locs[0].Name)
+	assert.Equal(t, 6, locs[0].Total)
+}
+
+// TestGetLocationsFilters tests filtering by minTotal and q.
+func TestGetLocationsFilters(t *testing.T) {
+	svc := fakeService{}
+	handler := api.NewAPIHandler(svc)
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	// minTotal filter
+	req1 := httptest.NewRequest(http.MethodGet, "/locations?minTotal=5", nil)
+	resp1, _ := app.Test(req1)
+	var locs1 []service.LocationStats
+	_ = json.NewDecoder(resp1.Body).Decode(&locs1)
+	assert.Len(t, locs1, 1)
+	assert.Equal(t, "PortA", locs1[0].Name)
+
+	// q filter
+	req2 := httptest.NewRequest(http.MethodGet, "/locations?q=portb", nil)
+	resp2, _ := app.Test(req2)
+	var locs2 []service.LocationStats
+	_ = json.NewDecoder(resp2.Body).Decode(&locs2)
+	assert.Len(t, locs2, 1)
+	assert.Equal(t, "PortB", locs2[0].Name)
 }

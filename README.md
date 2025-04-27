@@ -142,6 +142,26 @@ Prometheus scrape endpoint. Exposes metrics:
 - `thamestracker_cache_hits_total`
 - `thamestracker_cache_misses_total`
 
+### GET /locations
+Returns aggregated vessel counts per location.
+
+**Query parameters**:
+- `minTotal` (integer, default `0`): include only locations with `total` >= `minTotal`.
+- `q` (string, optional): case-insensitive substring filter on the location `name`.
+
+**Response**:
+```json
+[
+  {"name":"PortA","code":"","inport":1,"arrivals":2,"departures":3,"forecast":0,"total":6},
+  {"name":"PortB","code":"","inport":0,"arrivals":1,"departures":0,"forecast":0,"total":1}
+]
+```
+
+**Example**:
+```bash
+curl -s "http://localhost:8080/locations?minTotal=5&q=port" | jq .
+```
+
 ## CLI Reference
 Built‑in CLI replicates service layer:
 ```bash

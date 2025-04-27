@@ -2,20 +2,25 @@ package api
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
+	"github.com/Takenobou/thamestracker/internal/helpers/metrics"
 	"github.com/Takenobou/thamestracker/internal/helpers/utils"
 	"github.com/Takenobou/thamestracker/internal/models"
+	"github.com/Takenobou/thamestracker/internal/service"
 	ics "github.com/arran4/golang-ical"
 	"github.com/gofiber/fiber/v2"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type ServiceInterface interface {
 	GetBridgeLifts() ([]models.BridgeLift, error)
 	GetVessels(vesselType string) ([]models.Vessel, error)
 	HealthCheck() error
+	ListLocations() ([]service.LocationStats, error)
 }
 
 type APIHandler struct {
@@ -166,4 +171,39 @@ func (h *APIHandler) Healthz(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"status": "fail", "error": err.Error()})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
+}
+
+// GetLocations handles GET /locations endpoint.
+func (h *APIHandler) GetLocations(c *fiber.Ctx) error {
+	// metrics
+	timer := prometheus.NewTimer(metrics.LocationsRequestDuration)
+	defer timer.ObserveDuration()
+	metrics.LocationsRequests.Inc()
+
+	// parse query params
+	minTotal, err := strconv.Atoi(c.Query("minTotal", "0"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid minTotal"})
+	}
+	q := strings.ToLower(c.Query("q", ""))
+	// get aggregated stats
+	stats, err := h.svc.ListLocations()
+	if err != nil {
+		logger.Logger.Errorf("Error listing locations: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve location data"})
+	}
+	// filter and return
+	var out []service.LocationStats
+	for _, s := range stats {
+		if s.Total < minTotal {
+			continue
+		}
+		if q != "" && !strings.Contains(strings.ToLower(s.Name), q) {
+			continue
+		}
+		out = append(out, s)
+	}
+	// log at most one structured line
+	logger.Logger.Infof("path=/locations hits=%d", len(out))
+	return c.JSON(out)
 }

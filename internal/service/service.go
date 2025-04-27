@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -100,6 +101,71 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 	return vessels, nil
 }
 
+// LocationStats holds aggregated stats for a location.
+// name is the canonical label, code is blank for now.
+type LocationStats struct {
+	Name       string `json:"name"`
+	Code       string `json:"code"`
+	Inport     int    `json:"inport"`
+	Arrivals   int    `json:"arrivals"`
+	Departures int    `json:"departures"`
+	Forecast   int    `json:"forecast"`
+	Total      int    `json:"total"`
+}
+
+// ListLocations aggregates vessel counts by location.
+func (s *Service) ListLocations() ([]LocationStats, error) {
+	vessels, err := s.GetVessels("all")
+	if err != nil {
+		return nil, err
+	}
+	statsMap := make(map[string]*LocationStats)
+	for _, v := range vessels {
+		var name string
+		// choose location field based on vessel type
+		switch v.Type {
+		case "inport":
+			name = v.LocationName
+		case "arrivals":
+			name = v.LocationTo
+		case "departures":
+			name = v.LocationFrom
+		case "forecast":
+			name = v.LocationTo
+		default:
+			continue
+		}
+		if name == "" {
+			continue
+		}
+		if _, ok := statsMap[name]; !ok {
+			statsMap[name] = &LocationStats{Name: name, Code: ""}
+		}
+		stat := statsMap[name]
+		switch v.Type {
+		case "inport":
+			stat.Inport++
+		case "arrivals":
+			stat.Arrivals++
+		case "departures":
+			stat.Departures++
+		case "forecast":
+			stat.Forecast++
+		}
+	}
+	// compute totals and assemble slice
+	var list []LocationStats
+	for _, stat := range statsMap {
+		stat.Total = stat.Inport + stat.Arrivals + stat.Departures + stat.Forecast
+		list = append(list, *stat)
+	}
+	// sort by total desc
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Total > list[j].Total
+	})
+	return list, nil
+}
+
 func (s *Service) HealthCheck() error {
 	// Ping Redis
 	rdb := redis.NewClient(&redis.Options{Addr: config.AppConfig.Redis.Address})
@@ -114,6 +180,10 @@ func (s *Service) HealthCheck() error {
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("external API returned status %d", resp.StatusCode)
+	}
+	// also check ListLocations returns without error
+	if _, err := s.ListLocations(); err != nil {
+		return fmt.Errorf("ListLocations health check failed: %w", err)
 	}
 	return nil
 }

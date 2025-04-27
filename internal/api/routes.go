@@ -14,6 +14,7 @@ func SetupRoutes(app *fiber.App, handler *APIHandler) {
 	app.Get("/vessels", handler.GetVessels)
 	app.Get("/calendar.ics", handler.CalendarHandler)
 	app.Get("/healthz", handler.Healthz)
+	app.Get("/locations", handler.GetLocations)
 	// Prometheus metrics endpoint
 	app.Get("/metrics", func(c *fiber.Ctx) error {
 		mfs, err := prometheus.DefaultGatherer.Gather()

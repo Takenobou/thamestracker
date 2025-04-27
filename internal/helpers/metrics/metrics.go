@@ -36,8 +36,24 @@ var (
 			Help: "Total number of cache misses.",
 		},
 	)
+	// LocationsRequests counts GET /locations calls.
+	LocationsRequests = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "thamestracker_locations_requests_total",
+			Help: "Total number of /locations API requests.",
+		},
+	)
+	// LocationsRequestDuration tracks duration of GET /locations.
+	LocationsRequestDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "thamestracker_locations_request_duration_seconds",
+			Help:    "Duration of /locations request handling in seconds.",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
 )
 
 func init() {
-	prometheus.MustRegister(ScrapeCounter, ScrapeDuration, CacheHits, CacheMisses)
+	prometheus.MustRegister(ScrapeCounter, ScrapeDuration, CacheHits, CacheMisses,
+		LocationsRequests, LocationsRequestDuration)
 }
