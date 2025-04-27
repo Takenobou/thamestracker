@@ -3,12 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/Takenobou/thamestracker/internal/config"
+	"github.com/Takenobou/thamestracker/internal/helpers/cache"
+	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
-	"github.com/Takenobou/thamestracker/internal/scraper/bridge"
-	"github.com/Takenobou/thamestracker/internal/scraper/vessels"
+
+	"github.com/Takenobou/thamestracker/internal/service"
 	"github.com/joho/godotenv"
 )
 
@@ -17,14 +20,31 @@ func main() {
 	logger.InitLogger()
 	config.LoadConfig()
 
+	// initialize service layer
+	cacheClient := cache.NewRedisCache(config.AppConfig.Redis.Address)
+	svc := service.NewService(httpclient.DefaultClient, cacheClient)
+
 	if len(os.Args) < 2 {
-		logger.Logger.Errorf("Usage error. Usage: %s [bridge-lifts | vessels | arrivals | departures | forecast]", os.Args[0])
+		logger.Logger.Errorf("Usage error. Usage: %s [bridge-lifts | vessels | arrivals | departures | forecast | ics]", os.Args[0])
 		os.Exit(1)
 	}
 
 	switch os.Args[1] {
+	case "ics":
+		// Fetch calendar ICS feed from local server
+		url := fmt.Sprintf("http://localhost:%d/calendar.ics", config.AppConfig.Server.Port)
+		resp, err := httpclient.DefaultClient.Get(url)
+		if err != nil {
+			logger.Logger.Errorf("Failed to fetch calendar ICS: %v", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println(string(body))
+		return
+
 	case "bridge-lifts":
-		lifts, err := bridge.ScrapeBridgeLifts()
+		lifts, err := svc.GetBridgeLifts()
 		if err != nil {
 			logger.Logger.Errorf("Failed to scrape bridge lifts: %v", err)
 			os.Exit(1)
@@ -32,7 +52,7 @@ func main() {
 		printJSON(lifts)
 
 	case "vessels":
-		vesselList, err := vessels.ScrapeVessels("inport")
+		vesselList, err := svc.GetVessels("inport")
 		if err != nil {
 			logger.Logger.Errorf("Failed to scrape vessels in port: %v", err)
 			os.Exit(1)
@@ -40,7 +60,7 @@ func main() {
 		printJSON(vesselList)
 
 	case "arrivals":
-		arrivalList, err := vessels.ScrapeVessels("arrivals")
+		arrivalList, err := svc.GetVessels("arrivals")
 		if err != nil {
 			logger.Logger.Errorf("Failed to scrape vessel arrivals: %v", err)
 			os.Exit(1)
@@ -48,7 +68,7 @@ func main() {
 		printJSON(arrivalList)
 
 	case "departures":
-		departureList, err := vessels.ScrapeVessels("departures")
+		departureList, err := svc.GetVessels("departures")
 		if err != nil {
 			logger.Logger.Errorf("Failed to scrape vessel departures: %v", err)
 			os.Exit(1)
@@ -56,7 +76,7 @@ func main() {
 		printJSON(departureList)
 
 	case "forecast":
-		forecastList, err := vessels.ScrapeVessels("forecast")
+		forecastList, err := svc.GetVessels("forecast")
 		if err != nil {
 			logger.Logger.Errorf("Failed to scrape vessel forecasts: %v", err)
 			os.Exit(1)
@@ -64,7 +84,7 @@ func main() {
 		printJSON(forecastList)
 
 	default:
-		logger.Logger.Errorf("Unknown command: %s. Usage: Use 'bridge-lifts', 'vessels', 'arrivals', 'departures', or 'forecast'", os.Args[1])
+		logger.Logger.Errorf("Unknown command: %s. Usage: Use 'bridge-lifts', 'vessels', 'arrivals', 'departures', 'forecast', or 'ics'", os.Args[1])
 		os.Exit(1)
 	}
 }

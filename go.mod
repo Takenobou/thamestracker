@@ -23,11 +23,13 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/kennygrant/sanitize v1.2.4 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d // indirect
 	github.com/temoto/robotstxt v1.1.2 // indirect
+	github.com/tinylib/msgp v1.2.5 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.39.0 // indirect

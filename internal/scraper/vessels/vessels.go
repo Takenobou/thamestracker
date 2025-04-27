@@ -9,6 +9,7 @@ import (
 	"github.com/Takenobou/thamestracker/internal/config"
 	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
+	"github.com/Takenobou/thamestracker/internal/helpers/utils"
 	"github.com/Takenobou/thamestracker/internal/models"
 )
 
@@ -42,23 +43,25 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 	}
 	logger.Logger.Infof("Fetching vessels from API, url: %s, vesselType: %s", apiURL, vesselType)
 
+	// Retry GET with exponential backoff
 	var resp *http.Response
-	var err error
-	const maxRetries = 3
-	// Exponential backoff retries
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		resp, err = httpclient.DefaultClient.Get(apiURL)
-		if err == nil && resp.StatusCode < http.StatusInternalServerError {
-			break
+	err := utils.Retry(3, 500*time.Millisecond, func() error {
+		r, e := httpclient.DefaultClient.Get(apiURL)
+		if e != nil {
+			logger.Logger.Warnf("Fetch failed: %v", e)
+			return e
 		}
-		logger.Logger.Warnf("Fetch attempt %d failed: %v, status: %v", attempt, err, resp)
-		if resp != nil {
-			resp.Body.Close()
+		if r.StatusCode >= http.StatusInternalServerError {
+			r.Body.Close()
+			e = fmt.Errorf("server error %d", r.StatusCode)
+			logger.Logger.Warnf("Fetch failed: %v", e)
+			return e
 		}
-		time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
-	}
+		resp = r
+		return nil
+	})
 	if err != nil {
-		logger.Logger.Errorf("Error fetching vessels after %d attempts: %v", maxRetries, err)
+		logger.Logger.Errorf("Error fetching vessels after retries: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()

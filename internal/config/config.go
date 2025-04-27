@@ -20,6 +20,9 @@ type Config struct {
 		MaxFailures    int `toml:"max_failures"`
 		CoolOffSeconds int `toml:"cool_off_seconds"`
 	} `toml:"circuit_breaker"`
+	FallbackCacheSize       int `toml:"fallback_cache_size"`
+	FallbackCacheTTLSeconds int `toml:"fallback_cache_ttl_seconds"`
+	RequestsPerMin          int `toml:"requests_per_min"`
 }
 
 var AppConfig Config
@@ -34,6 +37,10 @@ func NewConfig() Config {
 	// circuit breaker defaults
 	cfg.CircuitBreaker.MaxFailures = 5
 	cfg.CircuitBreaker.CoolOffSeconds = 60
+	// fallback cache defaults
+	cfg.FallbackCacheSize = 1000
+	cfg.FallbackCacheTTLSeconds = 3600
+	cfg.RequestsPerMin = 60
 
 	// overrides
 	if portStr := os.Getenv("PORT"); portStr != "" {
@@ -58,6 +65,22 @@ func NewConfig() Config {
 	if v := os.Getenv("CB_COOL_OFF"); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {
 			cfg.CircuitBreaker.CoolOffSeconds = i
+		}
+	}
+	// overrides for fallback cache
+	if v := os.Getenv("CACHE_MAX_ENTRIES"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			cfg.FallbackCacheSize = i
+		}
+	}
+	if v := os.Getenv("CACHE_TTL_SECONDS"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			cfg.FallbackCacheTTLSeconds = i
+		}
+	}
+	if v := os.Getenv("REQUESTS_PER_MIN"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			cfg.RequestsPerMin = i
 		}
 	}
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/Takenobou/thamestracker/internal/config"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
+	"github.com/Takenobou/thamestracker/internal/helpers/utils"
 	"github.com/Takenobou/thamestracker/internal/models"
 	"github.com/gocolly/colly"
 )
@@ -75,10 +76,11 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 		}
 	})
 
-	// Start scraping.
-	err := c.Visit(baseURL)
-	if err != nil {
-		logger.Logger.Errorf("Error scraping Tower Bridge lifts: %v", err)
+	// Start scraping with retry
+	if err := utils.Retry(3, 500*time.Millisecond, func() error {
+		return c.Visit(baseURL)
+	}); err != nil {
+		logger.Logger.Errorf("Error scraping Tower Bridge lifts after retries: %v", err)
 		return nil, err
 	}
 

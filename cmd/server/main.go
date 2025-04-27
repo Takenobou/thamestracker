@@ -15,6 +15,7 @@ import (
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/service"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/joho/godotenv"
 )
 
@@ -28,6 +29,18 @@ func main() {
 	handler := api.NewAPIHandler(svc)
 
 	app := fiber.New()
+	// per-IP rate limiter middleware
+	app.Use(limiter.New(limiter.Config{
+		Max:        config.AppConfig.RequestsPerMin,
+		Expiration: time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).
+				JSON(fiber.Map{"error": "Rate limit exceeded"})
+		},
+	}))
 	// structured request logging middleware
 	app.Use(logger.RequestLogger())
 	api.SetupRoutes(app, handler)
