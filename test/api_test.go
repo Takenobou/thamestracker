@@ -135,10 +135,13 @@ func TestVesselsJSONAndICACountParity(t *testing.T) {
 	api.SetupRoutes(app, handler)
 
 	// Define query parameters to test
+	// test various vessel types and unique filter
 	queries := []string{
 		"?type=inport",
+		"?type=arrivals",
+		"?type=departures",
+		"?type=forecast",
 		"?unique=true",
-		// add more combinations as needed
 	}
 	for _, q := range queries {
 		// JSON endpoint
