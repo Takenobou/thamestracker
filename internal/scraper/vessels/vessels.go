@@ -81,7 +81,8 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 				logger.Logger.Warnf("Missing vessel name in category %s, skipping", category)
 				continue
 			}
-			if item.Visit == "" {
+			// skip missing voyage number, except for forecasts
+			if item.Visit == "" && category != "forecast" {
 				logger.Logger.Warnf("Missing voyage number for vessel %s, skipping", item.VesselName)
 				continue
 			}
