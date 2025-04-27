@@ -7,22 +7,22 @@ import (
 
 type Config struct {
 	Server struct {
-		Port int `toml:"port"`
-	} `toml:"server"`
+		Port int
+	}
 	URLs struct {
-		PortOfLondon string `toml:"port_of_london"`
-		TowerBridge  string `toml:"tower_bridge"`
-	} `toml:"urls"`
+		PortOfLondon string
+		TowerBridge  string
+	}
 	Redis struct {
-		Address string `toml:"address"`
-	} `toml:"redis"`
+		Address string
+	}
 	CircuitBreaker struct {
-		MaxFailures    int `toml:"max_failures"`
-		CoolOffSeconds int `toml:"cool_off_seconds"`
-	} `toml:"circuit_breaker"`
-	FallbackCacheSize       int `toml:"fallback_cache_size"`
-	FallbackCacheTTLSeconds int `toml:"fallback_cache_ttl_seconds"`
-	RequestsPerMin          int `toml:"requests_per_min"`
+		MaxFailures    int
+		CoolOffSeconds int
+	}
+	FallbackCacheSize       int
+	FallbackCacheTTLSeconds int
+	RequestsPerMin          int
 }
 
 var AppConfig Config

@@ -1,155 +1,163 @@
 # ThamesTracker
 
-**ThamesTracker** is a tool for tracking ship movements along the Thames. It provides both a scraper for live data and a web API to access the information.
+ThamesTracker tracks Tower Bridge lift events and vessel movements on the River Thames. It exposes a JSON API, an iCalendar feed, and provides CLI tools.
 
-## Features
-
-- **Bridge Lifts:** Scrape upcoming Tower Bridge lift events.
-- **Vessel Movements:** Scrape and display vessel information (in port, arrivals, departures, forecast).
-- **Calendar Feed:** Generate an iCalendar feed for bridge lifts and vessel movements.
-- **Caching:** Utilizes Redis for caching API responses.
-- **Configuration:** Minimal configuration via environment variables with sensible defaults.
-
-## Installation
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/Takenobou/thamestracker.git
-   cd thamestracker
-   ```
-
-2. **Set up your environment variables:**
-
-   Create a `.env` file in the root directory to override defaults:
-
-   ```env
-   PORT=8080
-   REDIS_ADDRESS=localhost:6379
-   ```
-
-3. **Install dependencies:**
-
-   ```bash
-   go mod download
-   ```
-
-4. **Build the project:**
-
-   ```bash
-   go build ./...
-   ```
-
-## Running the Application
-
-### As a Server
-
-To run the web API server:
-
+## Quickstart
+### Local development
 ```bash
+# Clone and install deps
+git clone https://github.com/Takenobou/thamestracker.git
+cd thamestracker
+go mod download
+
+# Run server (defaults to port 8080)
 go run ./cmd/server/main.go
 ```
 
-The server will start on the port defined in your environment (default: `8080`).
-
-### Command Line Tools
-
-The project also provides command line utilities for scraping data:
-
-- **Bridge Lifts:**
-
-  ```bash
-    go run ./cmd/scraper/main.go bridge-lifts
-  ```
-
-- **Vessels (Inport):**
-
-  ```bash
-    go run ./cmd/scraper/main.go vessels
-  ```
-
-- **Vessel Arrivals:**
-
-  ```bash
-    go run ./cmd/scraper/main.go arrivals
-  ```
-
-- **Vessel Departures:**
-
-  ```bash
-    go run ./cmd/scraper/main.go departures
-  ```
-
-- **Vessel Forecast:**
-
-  ```bash
-    go run ./cmd/scraper/main.go forecast
-  ```
-
-## Deployment with Docker
-
-You can deploy ThamesTracker using Docker Compose. The `docker-compose.yml` file is included in the repository and defines both services.
-
-### Example `docker-compose.yml`:
-
+### Docker Compose
 ```yaml
+version: '3.8'
 services:
   thamestracker:
-    container_name: thamestracker
     image: ghcr.io/takenobou/thamestracker:latest
-    restart: always
     ports:
       - "8080:8080"
     environment:
-      - PORT=8080
-      - REDIS_ADDRESS=redis:6379
+      PORT: 8080
+      PORT_OF_LONDON: https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists
+      TOWER_BRIDGE: https://www.towerbridge.org.uk/lift-times
+      REDIS_ADDRESS: redis://redis:6379
+      CB_MAX_FAILURES: 5
+      CB_COOL_OFF: 60
+      CACHE_MAX_ENTRIES: 1000
+      CACHE_TTL_SECONDS: 3600
+      REQUESTS_PER_MIN: 60
     depends_on:
       - redis
 
   redis:
-    container_name: thamestracker-redis
     image: redis:latest
-    restart: always
     ports:
       - "6379:6379"
 ```
 
-### Running the services
+## Configuration
+All settings via environment variables (no TOML). Defaults shown:
 
-1. Start the services using Docker Compose:
-   ```bash
-   docker-compose up -d
-   ```
+| Variable           | Default                                                         | Description                                    |
+|--------------------|-----------------------------------------------------------------|------------------------------------------------|
+| `PORT`             | `8080`                                                          | HTTP port for server                           |
+| `PORT_OF_LONDON`   | `https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists`   | Base URL for Port of London ship API           |
+| `TOWER_BRIDGE`     | `https://www.towerbridge.org.uk/lift-times`                     | URL for Tower Bridge lift times page           |
+| `REDIS_ADDRESS`    | `localhost:6379`                                                | Redis connection address                       |
+| `CB_MAX_FAILURES`  | `5`                                                             | Circuit‑breaker max consecutive failures       |
+| `CB_COOL_OFF`      | `60`                                                            | Circuit‑breaker open timeout (sec)             |
+| `CACHE_MAX_ENTRIES`| `1000`                                                          | Max entries in in‑memory fallback cache        |
+| `CACHE_TTL_SECONDS`| `3600`                                                          | TTL for in‑memory fallback cache (sec)         |
+| `REQUESTS_PER_MIN` | `60`                                                            | Per‑IP rate‑limit (requests per minute)        |
 
-2. Visit `http://localhost:8080` to access ThamesTracker.
+## API Reference
 
-## API Endpoints
+### GET /bridge-lifts
+Returns upcoming Tower Bridge lift events in JSON.
 
-Once the server is running, the following endpoints are available:
+**Query parameters**:
+- `unique` (boolean, default `false`): remove duplicate lifts by vessel name.
+- `name` (string, optional): filter lifts by vessel name substring.
 
-- **GET /bridge-lifts**  
-  Retrieves upcoming Tower Bridge lift events in JSON format.
-  
-  **Query Parameters:**
-  - `unique` (boolean, default: false): If set to `true`, duplicate events are filtered out.
+**Response**:
+```json
+[{
+  "date": "2025-04-05",
+  "time": "17:45",
+  "vessel": "HMS Example",
+  "direction": "Up river"
+}]
+```
 
-- **GET /vessels**  
-  Retrieves vessel movements in JSON format.
-  
-  **Query Parameters:**
-  - `type` (string, default: "all"): Filter by vessel type. Valid values include: `inport`, `arrivals`, `departures`, `forecast`, or `all`.
-  - `name` (string, optional): Filter by vessel name.
-  - `location` (string, optional): Filter by vessel location.
-  - `nationality` (string, optional): Filter by vessel nationality.
+**Example**:
+```bash
+curl -s "http://localhost:8080/bridge-lifts?unique=true&name=queen" | jq .
+```
 
-- **GET /calendar.ics**  
-  Generates an iCalendar feed for bridge lifts and vessel events. The calendar feed adheres to the iCalendar format and can be imported into popular calendar applications as a subscription and new events will be added automatically.
-  
-  **Query Parameters:**
-  - `eventType` (string, default: "all"): Determines which events to include. Valid values are:
-    - "all": Include both bridge lifts and vessel events.
-    - "bridge": Include only bridge lift events.
-    - "vessel": Include only vessel events.
-  - `unique` (boolean, default: false): If set to `true`, duplicate bridge lift events are filtered out.
-  - `name` (string, optional): If provided, filters events by vessel name.
-  - `location` (string, optional): If provided, filters events by vessel location.
+### GET /vessels
+Returns vessel movements in JSON.
+
+**Query parameters**:
+| Name         | Type    | Default | Description                              |
+|--------------|---------|---------|------------------------------------------|
+| `type`       | string  | `all`   | one of `inport`, `arrivals`, `departures`, `forecast`, or `all` |
+| `name`       | string  | —       | filter by vessel name                    |
+| `location`   | string  | —       | filter by port/all location fields       |
+| `nationality`| string  | —       | filter by vessel nationality             |
+| `after`      | RFC3339 | —       | include events after this timestamp      |
+| `before`     | RFC3339 | —       | include events before this timestamp     |
+| `unique`     | boolean | `false` | remove duplicate vessel names            |
+
+**Response**:
+```json
+[{
+  "time": "20:33",
+  "date": "25/01/2025",
+  "location_name": "Port Example",
+  "name": "Example Vessel",
+  "voyage_number": "E1234",
+  "type": "inport"
+}]
+```
+
+**Example**:
+```bash
+curl -s "http://localhost:8080/vessels?type=arrivals&unique=true&after=2025-04-01T00:00:00Z" | jq .
+```
+
+### GET /calendar.ics
+Returns an iCalendar feed combining bridge lifts and vessel events.
+
+**Query parameters**:
+- `eventType` (string, default `all`): choose `all`, `bridge`, or `vessel` events.
+- All `/vessels` and `/bridge-lifts` filters apply when `eventType` includes that type.
+
+**Example**:
+```bash
+curl -s "http://localhost:8080/calendar.ics?type=departures&unique=true" > feed.ics
+```
+
+### GET /healthz
+Liveness probe. Returns HTTP 200 if Redis and external API are healthy, HTTP 503 otherwise.
+
+**Response**:
+```json
+{ "status": "ok" }
+``` or 
+```json
+{ "status": "fail", "error": "health check error" }
+```
+
+### GET /metrics
+Prometheus scrape endpoint. Exposes metrics:
+- `thamestracker_external_api_scrapes_total{api="bridge|vessels"}`
+- `thamestracker_external_api_duration_seconds{api="bridge|vessels"}`
+- `thamestracker_cache_hits_total`
+- `thamestracker_cache_misses_total`
+
+## CLI Reference
+Built‑in CLI replicates service layer:
+```bash
+# Bridge lifts (JSON)
+thamestracker bridge-lifts
+
+# Vessels in port (JSON)
+thamestracker vessels
+
+# Vessel arrivals / departures / forecast
+thamestracker arrivals
+thamestracker departures
+thamestracker forecast
+
+# iCalendar feed
+thamestracker ics > feed.ics
+```
+
+## License
+MIT

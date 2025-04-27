@@ -38,7 +38,7 @@ type vesselData struct {
 func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 	apiURL := config.AppConfig.URLs.PortOfLondon
 	if apiURL == "" {
-		logger.Logger.Errorf("Port of London API URL is missing from config.toml")
+		logger.Logger.Errorf("Port of London API URL is missing: set PORT_OF_LONDON environment variable")
 		return nil, fmt.Errorf("missing api url")
 	}
 	logger.Logger.Infof("Fetching vessels from API, url: %s, vesselType: %s", apiURL, vesselType)

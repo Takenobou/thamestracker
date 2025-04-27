@@ -37,19 +37,15 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 	if opts.Unique {
 		lifts = utils.FilterUniqueLifts(lifts, 4)
 	}
-	// Additional location filtering (using vessel name) if specified.
-	if opts.Location != "" {
-		var filtered []interface{}
+	// Additional name filtering (using vessel name) if specified.
+	if name := strings.ToLower(c.Query("name", "")); name != "" {
+		var filtered []models.BridgeLift
 		for _, lift := range lifts {
-			if strings.Contains(strings.ToLower(lift.Vessel), opts.Location) {
+			if strings.Contains(strings.ToLower(lift.Vessel), name) {
 				filtered = append(filtered, lift)
 			}
 		}
-		// Recast to []models.BridgeLift.
-		lifts = make([]models.BridgeLift, len(filtered))
-		for i, v := range filtered {
-			lifts[i] = v.(models.BridgeLift)
-		}
+		lifts = filtered
 	}
 	return c.JSON(lifts)
 }
@@ -92,8 +88,8 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 				lifts = utils.FilterUniqueLifts(lifts, 4)
 			}
 			for i, lift := range lifts {
-				// Filter by location if provided.
-				if opts.Location != "" && !strings.Contains(strings.ToLower(lift.Vessel), opts.Location) {
+				// Filter by name if provided.
+				if name := strings.ToLower(c.Query("name", "")); name != "" && !strings.Contains(strings.ToLower(lift.Vessel), name) {
 					continue
 				}
 				start, err := time.Parse("2006-01-02 15:04", lift.Date+" "+lift.Time)

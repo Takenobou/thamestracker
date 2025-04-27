@@ -17,7 +17,7 @@ import (
 func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 	baseURL := config.AppConfig.URLs.TowerBridge
 	if baseURL == "" {
-		logger.Logger.Errorf("Tower Bridge URL is missing from config")
+		logger.Logger.Errorf("Tower Bridge URL is missing: set TOWER_BRIDGE environment variable")
 		return nil, fmt.Errorf("missing Tower Bridge URL")
 	}
 	logger.Logger.Infof("Fetching Tower Bridge lifts, url: %s", baseURL)

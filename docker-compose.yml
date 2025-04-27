@@ -6,7 +6,14 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
+      - PORT_OF_LONDON=https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists
+      - TOWER_BRIDGE=https://www.towerbridge.org.uk/lift-times
       - REDIS_ADDRESS=redis:6379
+      - CB_MAX_FAILURES=5
+      - CB_COOL_OFF=60
+      - CACHE_MAX_ENTRIES=1000
+      - CACHE_TTL_SECONDS=3600
+      - REQUESTS_PER_MIN=100
     depends_on:
       - redis
 
