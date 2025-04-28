@@ -66,17 +66,14 @@ func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 
 func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
-	// determine if any vessel-specific filters are applied
-	hasVesselFilter := opts.Unique || opts.VesselType != "all" ||
-		opts.Name != "" || opts.Location != "" || opts.Nationality != "" || opts.After != "" || opts.Before != ""
 
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetProductId("-//ThamesTracker//EN")
 	now := time.Now()
 
-	// Bridge events in the calendar (only when no vessel filters)
-	if !hasVesselFilter && (opts.EventType == "all" || opts.EventType == "bridge") {
+	// Bridge events in the calendar
+	if opts.EventType == "all" || opts.EventType == "bridge" {
 		lifts, err := h.svc.GetBridgeLifts()
 		if err != nil {
 			logger.Logger.Errorf("Error fetching bridge lifts: %v", err)

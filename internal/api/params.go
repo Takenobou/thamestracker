@@ -20,8 +20,13 @@ type QueryOptions struct {
 
 // ParseQueryOptions parses common query parameters from the Fiber context.
 func ParseQueryOptions(c *fiber.Ctx) QueryOptions {
+	// support 'eventType' or fallback to 'type' for calendar
+	eventType := strings.ToLower(c.Query("eventType", ""))
+	if eventType == "" {
+		eventType = strings.ToLower(c.Query("type", "all"))
+	}
 	opts := QueryOptions{
-		EventType:  strings.ToLower(c.Query("eventType", "all")),
+		EventType:  eventType,
 		Location:   strings.ToLower(c.Query("location", "")),
 		VesselType: strings.ToLower(c.Query("type", "all")),
 	}
