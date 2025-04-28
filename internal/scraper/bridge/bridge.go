@@ -37,12 +37,10 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 			logger.Logger.Errorf("Error parsing datetime %s: %v", rawTime, err)
 			return
 		}
-		loc, _ := time.LoadLocation("Europe/London")
-		tLondon := tParsed.In(loc)
-
+		// rawTime already in London local time, skip conversion
 		lift := models.BridgeLift{
-			Date:      tLondon.Format("2006-01-02"),
-			Time:      tLondon.Format("15:04"),
+			Date:      tParsed.Format("2006-01-02"),
+			Time:      tParsed.Format("15:04"),
 			Vessel:    strings.TrimSpace(e.ChildText("td:nth-child(4)")),
 			Direction: strings.TrimSpace(e.ChildText("td:nth-child(5)")),
 		}
