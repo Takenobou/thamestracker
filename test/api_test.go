@@ -165,8 +165,13 @@ func TestVesselsJSONAndICACountParity(t *testing.T) {
 		assert.NoError(t, err)
 		countJSON := len(vessels)
 
-		// ICS endpoint
-		reqICS := httptest.NewRequest(http.MethodGet, "/calendar.ics"+q, nil)
+		// ICS endpoint: ensure type param present (default to all)
+		icsQuery := q
+		if !strings.Contains(q, "type=") {
+			// no type in query, default to all
+			icsQuery = "?type=all&" + strings.TrimPrefix(q, "?")
+		}
+		reqICS := httptest.NewRequest(http.MethodGet, "/calendar.ics"+icsQuery, nil)
 		respICS, err := app.Test(reqICS)
 		assert.NoError(t, err)
 		buf := new(bytes.Buffer)

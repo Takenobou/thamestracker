@@ -1,11 +1,11 @@
 package api
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	calendar "github.com/Takenobou/thamestracker/internal/calendar"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/helpers/metrics"
 	"github.com/Takenobou/thamestracker/internal/helpers/utils"
@@ -14,8 +14,6 @@ import (
 	ics "github.com/arran4/golang-ical"
 	"github.com/gofiber/fiber/v2"
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 type ServiceInterface interface {
@@ -70,10 +68,28 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetProductId("-//ThamesTracker//EN")
+	// VCALENDAR refresh hint
+	cal.SetRefreshInterval("PT1H")
 	now := time.Now()
 
-	// Bridge events in the calendar
-	if opts.EventType == "all" || opts.EventType == "bridge" {
+	// parse optional date-range filters
+	fromStr := c.Query("from", "")
+	toStr := c.Query("to", "")
+	var fromTime, toTime, toEnd time.Time
+	if fromStr != "" {
+		if ft, err := time.Parse("2006-01-02", fromStr); err == nil {
+			fromTime = ft
+		}
+	}
+	if toStr != "" {
+		if tt, err := time.Parse("2006-01-02", toStr); err == nil {
+			toTime = tt
+			toEnd = toTime.Add(24 * time.Hour)
+		}
+	}
+
+	// Bridge events (only when explicitly requested)
+	if opts.EventType == "bridge" {
 		lifts, err := h.svc.GetBridgeLifts()
 		if err != nil {
 			logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
@@ -81,94 +97,57 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 			if opts.Unique {
 				lifts = utils.FilterUniqueLifts(lifts, 4)
 			}
-			// Apply name filter
 			lifts = utils.FilterBridgeLiftsByName(lifts, opts.Name)
-			for i, lift := range lifts {
+			for _, lift := range lifts {
 				start, err := time.Parse("2006-01-02 15:04", lift.Date+" "+lift.Time)
 				if err != nil {
 					logger.Logger.Errorf("Error parsing bridge lift time for vessel %s: %v", lift.Vessel, err)
 					continue
 				}
-				end := start.Add(10 * time.Minute)
-
-				eventID := fmt.Sprintf("bridge-%d@thamestracker", i)
-				event := cal.AddEvent(eventID)
-				event.SetCreatedTime(now)
-				event.SetDtStampTime(now)
-				event.SetModifiedAt(now)
-				event.SetStartAt(start)
-				event.SetEndAt(end)
-				event.SetSummary(fmt.Sprintf("Tower Bridge Lift: %s", lift.Vessel))
-				event.SetDescription(fmt.Sprintf("Direction: %s", lift.Direction))
-				event.SetLocation("Tower Bridge\\n222 Tower Bridge Road, London, SE1 2UP, England")
+				if fromStr != "" && start.Before(fromTime) {
+					continue
+				}
+				if toStr != "" && start.After(toEnd) {
+					continue
+				}
+				calendar.BuildBridgeEvent(cal, lift, start)
 			}
 		}
 	}
 
-	// Vessel events in the calendar.
-	if opts.EventType == "all" || opts.EventType == "vessel" {
-		// Retrieve with requested vessel type
+	// Vessel events (inport/arrivals/departures/forecast as well as all)
+	if opts.EventType != "bridge" {
 		vessels, err := h.svc.GetVessels(opts.VesselType)
 		if err != nil {
 			logger.Logger.Errorf("Error fetching vessel data: %v", err)
 		} else {
-			// Apply calendar filters to match JSON behavior
 			vessels = utils.FilterVessels(vessels, c)
 			if opts.Unique {
 				vessels = utils.FilterUniqueVessels(vessels)
 			}
-			for i, vessel := range vessels {
-				eventID := fmt.Sprintf("vessel-%d@thamestracker", i)
-				event := cal.AddEvent(eventID)
-				event.SetCreatedTime(now)
-				event.SetDtStampTime(now)
-				event.SetModifiedAt(now)
-
+			for _, vessel := range vessels {
+				var start, end time.Time
 				if vessel.Type == "inport" {
-					today := time.Now()
-					start := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
-					end := start.Add(24 * time.Hour)
-
-					event.SetAllDayStartAt(start)
-					event.SetAllDayEndAt(end)
-
-					event.SetSummary(fmt.Sprintf("Vessel In Port: %s", vessel.Name))
+					today := now
+					start = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
+					end = start.Add(24 * time.Hour)
 				} else {
-					originalArrival, err := time.Parse("02/01/2006 15:04", vessel.Date+" "+vessel.Time)
+					orig, err := time.Parse("02/01/2006 15:04", vessel.Date+" "+vessel.Time)
 					if err != nil {
 						logger.Logger.Errorf("Error parsing vessel time for %s: %v", vessel.Name, err)
 						continue
 					}
 					today := now
-					start := time.Date(today.Year(), today.Month(), today.Day(),
-						originalArrival.Hour(), originalArrival.Minute(), 0, 0, today.Location())
-					end := start.Add(15 * time.Minute)
-
-					event.SetStartAt(start)
-					event.SetEndAt(end)
-
-					// Differentiate summary based on vessel type
-					var prefix string
-					switch vessel.Type {
-					case "arrivals":
-						prefix = "Arrival"
-					case "departures":
-						prefix = "Departure"
-					case "forecast":
-						prefix = "Forecast"
-					default:
-						prefix = cases.Title(language.English).String(vessel.Type)
-					}
-					event.SetSummary(fmt.Sprintf("Vessel %s: %s", prefix, vessel.Name))
+					start = time.Date(today.Year(), today.Month(), today.Day(), orig.Hour(), orig.Minute(), 0, 0, today.Location())
+					end = start.Add(15 * time.Minute)
 				}
-
-				vesselLocation := vessel.LocationName
-				if vesselLocation == "" {
-					vesselLocation = strings.TrimSpace(vessel.LocationFrom + " " + vessel.LocationTo)
+				if fromStr != "" && start.Before(fromTime) {
+					continue
 				}
-				event.SetLocation(vesselLocation)
-				event.SetDescription(fmt.Sprintf("Arrived: %s | Voyage: %s",
-					vessel.Date+" "+vessel.Time, vessel.VoyageNo))
+				if toStr != "" && start.After(toEnd) {
+					continue
+				}
+				calendar.BuildVesselEvent(cal, vessel, start, end)
 			}
 		}
 	}

@@ -118,11 +118,13 @@ Returns an iCalendar feed combining bridge lifts and vessel events.
 
 **Query parameters**:
 - `eventType` (string, default `all`): choose `all`, `bridge`, or `vessel` events.
+- `from` (YYYY-MM-DD, optional): include only events starting on or after this date.
+- `to` (YYYY-MM-DD, optional): include only events starting on or before this date.
 - All `/vessels` and `/bridge-lifts` filters apply when `eventType` includes that type.
 
 **Example**:
 ```bash
-curl -s "http://localhost:8080/calendar.ics?type=departures&unique=true" > feed.ics
+curl -s "http://localhost:8080/calendar.ics?type=departures&unique=true&from=2025-04-01&to=2025-04-07" > feed.ics
 ```
 
 ### GET /healthz
