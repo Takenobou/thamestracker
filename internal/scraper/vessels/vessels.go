@@ -104,30 +104,8 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 				ts = time.Now().Format("2006-01-02 15:04:05.000")
 			}
 
-			// extract date and time parts directly
-			var dateStr, timeStr string
-			if ts == "" {
-				nowLocal := time.Now()
-				dateStr = nowLocal.Format("02/01/2006")
-				timeStr = nowLocal.Format("15:04")
-			} else {
-				// robustly parse timestamp with or without milliseconds
-				layouts := []string{"2006-01-02 15:04:05.000", "2006-01-02 15:04:05"}
-				var t time.Time
-				var parseErr error
-				for _, layout := range layouts {
-					t, parseErr = time.Parse(layout, ts)
-					if parseErr == nil {
-						break
-					}
-				}
-				if parseErr != nil {
-					logger.Logger.Warnf("Timestamp parse failed for vessel %s: %v, using now()", item.VesselName, parseErr)
-					t = time.Now()
-				}
-				dateStr = t.Format("02/01/2006")
-				timeStr = t.Format("15:04")
-			}
+			// parse raw timestamp into date and time
+			dateStr, timeStr := utils.ParseRawTimestamp(ts)
 
 			vessels = append(vessels, models.Vessel{
 				Time:         timeStr,

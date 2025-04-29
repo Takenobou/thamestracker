@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
+	keycache "github.com/Takenobou/thamestracker/internal/cache"
 	"github.com/Takenobou/thamestracker/internal/config"
-	"github.com/Takenobou/thamestracker/internal/helpers/cache"
+	cache "github.com/Takenobou/thamestracker/internal/helpers/cache"
 	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/helpers/metrics"
@@ -46,7 +47,8 @@ func getRedisClient() *redis.Client {
 
 func (s *Service) GetBridgeLifts() ([]models.BridgeLift, error) {
 	var lifts []models.BridgeLift
-	const key = "bridge_lifts"
+	// use centralized cache key
+	key := keycache.KeyBridgeLifts()
 	// try cache
 	if err := s.Cache.Get(key, &lifts); err != nil {
 		// cache miss
@@ -87,12 +89,9 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 	}
 	vesselType = vt
 	var vessels []models.Vessel
-	// versioned cache key to invalidate old entries
-	cacheKey := "v3_vessels_" + vesselType
-	if vesselType == "all" {
-		cacheKey = "v3_all_vessels"
-	}
-	if err := s.Cache.Get(cacheKey, &vessels); err != nil {
+	// cache key for vessels
+	key := keycache.KeyVessels(vesselType)
+	if err := s.Cache.Get(key, &vessels); err != nil {
 		// cache miss
 		metrics.CacheMisses.Inc()
 		// record scrape metrics
@@ -104,8 +103,8 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 			return nil, err2
 		}
 		vessels = data
-		if err3 := s.Cache.Set(cacheKey, vessels, 30*time.Minute); err3 != nil {
-			logger.Logger.Errorf("Failed to cache %s: %v", cacheKey, err3)
+		if err3 := s.Cache.Set(key, vessels, 30*time.Minute); err3 != nil {
+			logger.Logger.Errorf("Failed to cache %s: %v", key, err3)
 			return nil, err3
 		}
 	} else {
@@ -122,8 +121,8 @@ func (s *Service) GetFilteredVessels(vesselType, location string) ([]models.Vess
 	if strings.TrimSpace(location) == "" || vt == "all" {
 		return s.GetVessels(vt)
 	}
-	// composite cache key
-	key := fmt.Sprintf("v3_vessels_%s_location_%s", vt, location)
+	// composite cache key for filtered vessels
+	key := keycache.KeyVesselsByLoc(vt, location)
 	// initialize slice to avoid nil
 	vessels := make([]models.Vessel, 0)
 	if err := s.Cache.Get(key, &vessels); err == nil {

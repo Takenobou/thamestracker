@@ -15,26 +15,25 @@ import (
 func SetupRoutes(app *fiber.App, handler *APIHandler) {
 	app.Get("/bridge-lifts", handler.GetBridgeLifts)
 	app.Get("/vessels", handler.GetVessels)
-	app.Get("/calendar.ics", handler.CalendarHandler)
+	app.Get("/bridge-lifts/calendar.ics", handler.BridgeCalendarHandler)
+	app.Get("/vessels/calendar.ics", handler.VesselsCalendarHandler)
 	app.Get("/healthz", handler.Healthz)
 	app.Get("/locations", handler.GetLocations)
-	// Prometheus metrics endpoint
-	app.Get("/metrics", func(c *fiber.Ctx) error {
-		// gate metrics endpoint based on config
-		if !config.AppConfig.MetricsPublic {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Metrics endpoint is disabled"})
-		}
-		mfs, err := prometheus.DefaultGatherer.Gather()
-		if err != nil {
-			return c.Status(500).SendString(err.Error())
-		}
-		var buf bytes.Buffer
-		for _, mf := range mfs {
-			expfmt.MetricFamilyToText(&buf, mf)
-		}
-		c.Set("Content-Type", "text/plain; version=0.0.4")
-		return c.SendString(buf.String())
-	})
+	// Prometheus metrics endpoint (registered only when public)
+	if config.AppConfig.MetricsPublic {
+		app.Get("/metrics", func(c *fiber.Ctx) error {
+			mfs, err := prometheus.DefaultGatherer.Gather()
+			if err != nil {
+				return c.Status(500).SendString(err.Error())
+			}
+			var buf bytes.Buffer
+			for _, mf := range mfs {
+				expfmt.MetricFamilyToText(&buf, mf)
+			}
+			c.Set("Content-Type", "text/plain; version=0.0.4")
+			return c.SendString(buf.String())
+		})
+	}
 	// Serve OpenAPI spec
 	app.Get("/docs", func(c *fiber.Ctx) error {
 		specPath := filepath.Join("docs", "openapi.json")

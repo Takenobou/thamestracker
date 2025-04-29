@@ -172,29 +172,58 @@ func TestGetVessels_InvalidAfterBefore(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp2.StatusCode)
 }
 
-func TestCalendarEndpoint(t *testing.T) {
+func TestBridgeCalendarEndpoint(t *testing.T) {
 	svc := fakeService{}
 	handler := api.NewAPIHandler(svc)
 	app := fiber.New()
 	api.SetupRoutes(app, handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/calendar.ics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bridge-lifts/calendar.ics", nil)
 	resp, err := app.Test(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	buf := make([]byte, 1024)
-	n, _ := resp.Body.Read(buf)
-	body := string(buf[:n])
+	buf := new(bytes.Buffer)
+	_, _ = buf.ReadFrom(resp.Body)
+	body := buf.String()
 	assert.Contains(t, body, "BEGIN:VCALENDAR")
 }
 
-func TestCalendar_CircuitBreakerOpen(t *testing.T) {
+func TestBridgeCalendar_CircuitBreakerOpen(t *testing.T) {
 	handler := api.NewAPIHandler(openBreakerService{})
 	app := fiber.New()
 	api.SetupRoutes(app, handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/calendar.ics?type=bridge", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bridge-lifts/calendar.ics", nil)
+	resp, _ := app.Test(req)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	retry := resp.Header.Get("Retry-After")
+	assert.NotEmpty(t, retry)
+}
+
+func TestVesselsCalendarEndpoint(t *testing.T) {
+	svc := fakeService{}
+	handler := api.NewAPIHandler(svc)
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/vessels/calendar.ics?type=inport", nil)
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	buf := new(bytes.Buffer)
+	_, _ = buf.ReadFrom(resp.Body)
+	body := buf.String()
+	assert.Contains(t, body, "BEGIN:VCALENDAR")
+}
+
+func TestVesselsCalendar_CircuitBreakerOpen(t *testing.T) {
+	handler := api.NewAPIHandler(openBreakerService{})
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/vessels/calendar.ics?type=inport", nil)
 	resp, _ := app.Test(req)
 	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 	retry := resp.Header.Get("Retry-After")
@@ -267,7 +296,7 @@ func TestVesselsJSONAndICACountParity(t *testing.T) {
 			// no type in query, default to all
 			icsQuery = "?type=all&" + strings.TrimPrefix(q, "?")
 		}
-		reqICS := httptest.NewRequest(http.MethodGet, "/calendar.ics"+icsQuery, nil)
+		reqICS := httptest.NewRequest(http.MethodGet, "/vessels/calendar.ics"+icsQuery, nil)
 		respICS, err := app.Test(reqICS)
 		assert.NoError(t, err)
 		buf := new(bytes.Buffer)

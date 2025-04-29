@@ -2,8 +2,12 @@ package cache
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,18 +29,38 @@ type RedisCache struct {
 	ctx    context.Context
 }
 
-// NewRedisCache creates a new RedisCache.
+// NewRedisCache creates a new RedisCache or fallbackCache.
 func NewRedisCache(addr string) Cache {
-	r := &RedisCache{
-		client: redis.NewClient(&redis.Options{
-			Addr: addr,
-		}),
-		ctx: context.Background(),
+	if addr == "" {
+		// in-memory fallback only
+		return newFallbackCache()
 	}
-	return &CompositeCache{
-		redis:    r,
-		fallback: newFallbackCache(),
+	// parse Redis URI if present (redis:// or rediss://), else use host:port
+	var opts redis.Options
+	u, err := url.Parse(addr)
+	if err == nil && (u.Scheme == "redis" || u.Scheme == "rediss") {
+		// host and port
+		opts.Addr = u.Host
+		// password
+		if pwd, ok := u.User.Password(); ok {
+			opts.Password = pwd
+		}
+		// database
+		if dbStr := strings.Trim(u.Path, "/"); dbStr != "" {
+			if db, err := strconv.Atoi(dbStr); err == nil {
+				opts.DB = db
+			}
+		}
+		// TLS for rediss scheme or ssl param
+		if u.Scheme == "rediss" || strings.EqualFold(u.Query().Get("ssl"), "true") {
+			opts.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+		}
+	} else {
+		// assume simple address
+		opts.Addr = addr
 	}
+	client := redis.NewClient(&opts)
+	return &RedisCache{client: client, ctx: context.Background()}
 }
 
 // Set stores data in Redis.
@@ -146,28 +170,4 @@ func (f *fallbackCache) Get(key string, dest interface{}) error {
 	}
 	e.freq++
 	return json.Unmarshal(e.data, dest)
-}
-
-// CompositeCache wraps Redis and fallback.
-type CompositeCache struct {
-	redis    *RedisCache
-	fallback *fallbackCache
-}
-
-// Set tries Redis then fallback.
-func (c *CompositeCache) Set(key string, value interface{}, ttl time.Duration) error {
-	if err := c.redis.Set(key, value, ttl); err != nil {
-		// Redis down, fallback
-		return c.fallback.Set(key, value, ttl)
-	}
-	return nil
-}
-
-// Get tries Redis then fallback.
-func (c *CompositeCache) Get(key string, dest interface{}) error {
-	if err := c.redis.Get(key, dest); err == nil {
-		return nil
-	}
-	// Redis miss or error, try fallback
-	return c.fallback.Get(key, dest)
 }

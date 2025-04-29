@@ -25,17 +25,43 @@ func main() {
 	svc := service.NewService(httpclient.DefaultClient, cacheClient)
 
 	if len(os.Args) < 2 {
-		logger.Logger.Errorf("Usage error. Usage: %s [bridge-lifts | vessels | arrivals | departures | forecast | ics]", os.Args[0])
+		logger.Logger.Errorf("Usage error. Usage: %s [bridge-lifts | vessels | arrivals | departures | forecast | ics | bridge-ics | vessels-ics]", os.Args[0])
 		os.Exit(1)
 	}
 
 	switch os.Args[1] {
 	case "ics":
-		// Fetch calendar ICS feed from local server
+		// Fetch combined calendar ICS feed from local server
 		url := fmt.Sprintf("http://localhost:%d/calendar.ics", config.AppConfig.Server.Port)
 		resp, err := httpclient.DefaultClient.Get(url)
 		if err != nil {
 			logger.Logger.Errorf("Failed to fetch calendar ICS: %v", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println(string(body))
+		return
+
+	case "bridge-ics":
+		// Fetch bridge-lifts calendar ICS feed
+		url := fmt.Sprintf("http://localhost:%d/bridge-lifts/calendar.ics", config.AppConfig.Server.Port)
+		resp, err := httpclient.DefaultClient.Get(url)
+		if err != nil {
+			logger.Logger.Errorf("Failed to fetch bridge-lifts calendar ICS: %v", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println(string(body))
+		return
+
+	case "vessels-ics":
+		// Fetch vessels calendar ICS feed
+		url := fmt.Sprintf("http://localhost:%d/vessels/calendar.ics", config.AppConfig.Server.Port)
+		resp, err := httpclient.DefaultClient.Get(url)
+		if err != nil {
+			logger.Logger.Errorf("Failed to fetch vessels calendar ICS: %v", err)
 			os.Exit(1)
 		}
 		defer resp.Body.Close()
@@ -84,7 +110,7 @@ func main() {
 		printJSON(forecastList)
 
 	default:
-		logger.Logger.Errorf("Unknown command: %s. Usage: Use 'bridge-lifts', 'vessels', 'arrivals', 'departures', 'forecast', or 'ics'", os.Args[1])
+		logger.Logger.Errorf("Unknown command: %s. Usage: Use 'bridge-lifts', 'vessels', 'arrivals', 'departures', 'forecast', 'ics', 'bridge-ics', or 'vessels-ics'", os.Args[1])
 		os.Exit(1)
 	}
 }

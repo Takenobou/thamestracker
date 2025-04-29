@@ -26,6 +26,20 @@
         }
       }
     },
+    "/bridge-lifts/calendar.ics": {
+      "get": {
+        "responses": {
+          "200": { "description": "iCalendar feed for bridge lift events" }
+        }
+      }
+    },
+    "/vessels/calendar.ics": {
+      "get": {
+        "responses": {
+          "200": { "description": "iCalendar feed for vessel events" }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "responses": {
