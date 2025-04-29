@@ -35,10 +35,10 @@ func NewRedisCache(addr string) Cache {
 		// in-memory fallback only
 		return newFallbackCache()
 	}
-	// parse Redis URI if present (redis:// or rediss://), else use host:port
 	var opts redis.Options
-	u, err := url.Parse(addr)
-	if err == nil && (u.Scheme == "redis" || u.Scheme == "rediss") {
+	// if address starts with redis:// or rediss://, parse as URL, otherwise treat as host:port
+	if strings.HasPrefix(addr, "redis://") || strings.HasPrefix(addr, "rediss://") {
+		u, _ := url.Parse(addr)
 		// host and port
 		opts.Addr = u.Host
 		// password
@@ -56,7 +56,6 @@ func NewRedisCache(addr string) Cache {
 			opts.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 		}
 	} else {
-		// assume simple address
 		opts.Addr = addr
 	}
 	client := redis.NewClient(&opts)
