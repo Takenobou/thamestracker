@@ -127,10 +127,14 @@ func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 
 // BridgeCalendarHandler returns iCalendar feed with only bridge lift events.
 func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
-	// force eventType to bridge
-	// reuse CalendarHandler logic for bridge branch
+	// Load Europe/London timezone once
+	loc, errLoc := time.LoadLocation("Europe/London")
+	if errLoc != nil {
+		logger.Logger.Errorf("Error loading timezone Europe/London: %v", errLoc)
+		loc = time.UTC
+	}
+	// Get calendar options (e.g., unique, name filters)
 	opts := ParseQueryOptions(c)
-	// Treat as bridge feed only
 	// parse date-range filters
 	fromStr := c.Query("from", "")
 	toStr := c.Query("to", "")
@@ -154,6 +158,9 @@ func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetProductId("-//ThamesTracker//EN")
 	cal.SetRefreshInterval("PT1H")
+	// Add London timezone to calendar
+	cal.SetXWRTimezone("Europe/London")
+	cal.AddVTimezone(ics.NewTimezone("Europe/London"))
 	// fetch bridge lifts
 	lifts, err := h.bridge.GetBridgeLifts()
 	if err != nil {
@@ -168,7 +175,7 @@ func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 		}
 		lifts = utils.FilterBridgeLiftsByName(lifts, opts.Name)
 		for _, lift := range lifts {
-			start, err := time.Parse("2006-01-02 15:04", lift.Date+" "+lift.Time)
+			start, err := time.ParseInLocation("2006-01-02 15:04", lift.Date+" "+lift.Time, loc)
 			if err != nil {
 				logger.Logger.Errorf("Error parsing bridge lift time for vessel %s: %v", lift.Vessel, err)
 				continue
@@ -188,6 +195,13 @@ func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 
 // VesselsCalendarHandler returns iCalendar feed with only vessel events.
 func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
+	// Load Europe/London timezone once
+	loc, errLoc := time.LoadLocation("Europe/London")
+	if errLoc != nil {
+		logger.Logger.Errorf("Error loading timezone Europe/London: %v", errLoc)
+		loc = time.UTC
+	}
+	// Get calendar options (e.g., unique filter)
 	opts := ParseQueryOptions(c)
 	// parse date-range filters
 	fromStr := c.Query("from", "")
@@ -212,6 +226,9 @@ func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetProductId("-//ThamesTracker//EN")
 	cal.SetRefreshInterval("PT1H")
+	// Add London timezone to calendar
+	cal.SetXWRTimezone("Europe/London")
+	cal.AddVTimezone(ics.NewTimezone("Europe/London"))
 	now := time.Now()
 
 	vessels, err := h.vessel.GetVessels(opts.VesselType)
@@ -233,7 +250,7 @@ func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
 				start = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
 				end = start.Add(24 * time.Hour)
 			} else {
-				orig, err := time.Parse("02/01/2006 15:04", vessel.Date+" "+vessel.Time)
+				orig, err := time.ParseInLocation("02/01/2006 15:04", vessel.Date+" "+vessel.Time, loc)
 				if err != nil {
 					logger.Logger.Errorf("Error parsing vessel time for %s: %v", vessel.Name, err)
 					continue

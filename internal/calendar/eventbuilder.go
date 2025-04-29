@@ -48,6 +48,7 @@ func BuildBridgeEvent(cal *ics.Calendar, lift models.BridgeLift, start time.Time
 	e.SetCreatedTime(now)
 	e.SetDtStampTime(now)
 	e.SetModifiedAt(now)
+	// Set start and end times (time contains proper location info)
 	e.SetStartAt(start)
 	e.SetEndAt(start.Add(10 * time.Minute))
 	e.SetSummary(fmt.Sprintf("Tower Bridge Lift – %s", lift.Vessel))
