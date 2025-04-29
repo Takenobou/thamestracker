@@ -19,15 +19,15 @@ func ParseBridgeLiftElement(e *colly.HTMLElement) (*models.BridgeLift, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error parsing datetime %s: %w", rawTime, err)
 	}
-	loc, _ := time.LoadLocation("Europe/London")
-	tLondon := tParsed.In(loc)
+
+	local := tParsed
 
 	vessel := strings.TrimSpace(e.ChildText("td:nth-child(4)"))
 	direction := strings.TrimSpace(e.ChildText("td:nth-child(5)"))
 
 	return &models.BridgeLift{
-		Date:      tLondon.Format("2006-01-02"),
-		Time:      tLondon.Format("15:04"),
+		Date:      local.Format("2006-01-02"),
+		Time:      local.Format("15:04"),
 		Vessel:    vessel,
 		Direction: direction,
 	}, nil

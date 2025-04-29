@@ -42,6 +42,11 @@ func (f fakeService) ListLocations() ([]service.LocationStats, error) {
 	}, nil
 }
 
+// Add GetFilteredVessels to fakeService
+func (f fakeService) GetFilteredVessels(vesselType, location string) ([]models.Vessel, error) {
+	return f.GetVessels(vesselType)
+}
+
 // failingService implements ServiceInterface with a failing HealthCheck.
 type failingService struct{}
 
@@ -50,6 +55,11 @@ func (f failingService) GetVessels(vesselType string) ([]models.Vessel, error) {
 func (f failingService) HealthCheck() error                                    { return fmt.Errorf("unhealthy") }
 func (f failingService) ListLocations() ([]service.LocationStats, error) {
 	return nil, fmt.Errorf("fail")
+}
+
+// Add GetFilteredVessels to failingService
+func (f failingService) GetFilteredVessels(vesselType, location string) ([]models.Vessel, error) {
+	return f.GetVessels(vesselType)
 }
 
 func TestGetBridgeLiftsEndpoint(t *testing.T) {

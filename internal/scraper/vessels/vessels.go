@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Takenobou/thamestracker/internal/config"
@@ -74,13 +75,6 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 
 	var vessels []models.Vessel
 
-	// load timezone location from config with error handling
-	loc, errLoc := time.LoadLocation(config.AppConfig.Timezone)
-	if errLoc != nil {
-		logger.Logger.Warnf("Could not load location %s: %v, defaulting to UTC", config.AppConfig.Timezone, errLoc)
-		loc = time.UTC
-	}
-
 	// Helper function to process vessel data from a given category.
 	processVessels := func(vesselList []vesselData, category string) {
 		for _, item := range vesselList {
@@ -108,18 +102,28 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 				ts = time.Now().Format("2006-01-02 15:04:05.000")
 			}
 
-			// parse in UTC then convert
-			parsedUTC, err := time.ParseInLocation("2006-01-02 15:04:05.000", ts, time.UTC)
-			if err != nil {
-				logger.Logger.Errorf("Error parsing time %s for vessel %s: %v", ts, item.VesselName, err)
-				continue
+			// extract date and time parts directly
+			var dateStr, timeStr string
+			if ts == "" {
+				nowLocal := time.Now()
+				dateStr = nowLocal.Format("02/01/2006")
+				timeStr = nowLocal.Format("15:04")
+			} else {
+				// ts format "2006-01-02 15:04:05.000"
+				datePart := ts[:10]
+				timePart := ts[11:16]
+				parts := strings.Split(datePart, "-")
+				if len(parts) == 3 {
+					dateStr = parts[2] + "/" + parts[1] + "/" + parts[0]
+				} else {
+					dateStr = datePart
+				}
+				timeStr = timePart
 			}
-			// use preloaded location instead of reloading each time
-			local := parsedUTC.In(loc)
 
 			vessels = append(vessels, models.Vessel{
-				Time:         local.Format("15:04"),
-				Date:         local.Format("02/01/2006"),
+				Time:         timeStr,
+				Date:         dateStr,
 				LocationFrom: item.LocationFrom,
 				LocationTo:   item.LocationTo,
 				LocationName: item.LocationName,

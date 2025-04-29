@@ -19,6 +19,7 @@ import (
 type ServiceInterface interface {
 	GetBridgeLifts() ([]models.BridgeLift, error)
 	GetVessels(vesselType string) ([]models.Vessel, error)
+	GetFilteredVessels(vesselType, location string) ([]models.Vessel, error)
 	HealthCheck() error
 	ListLocations() ([]service.LocationStats, error)
 }
@@ -49,12 +50,13 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 
 func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
-	vessels, err := h.svc.GetVessels(opts.VesselType)
+	// fetch and cache filtered vessels by type and location
+	vessels, err := h.svc.GetFilteredVessels(opts.VesselType, opts.Location)
 	if err != nil {
 		logger.Logger.Errorf("Error fetching vessel data: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve vessel data"})
 	}
-	// Apply JSON endpoint filters: name, location, nationality, after, before
+	// Apply JSON endpoint filters: name, nationality, after, before
 	vessels = utils.FilterVessels(vessels, c)
 	if opts.Unique {
 		vessels = utils.FilterUniqueVessels(vessels)
@@ -137,9 +139,8 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 						logger.Logger.Errorf("Error parsing vessel time for %s: %v", vessel.Name, err)
 						continue
 					}
-					today := now
-					start = time.Date(today.Year(), today.Month(), today.Day(), orig.Hour(), orig.Minute(), 0, 0, today.Location())
-					end = start.Add(15 * time.Minute)
+					start = orig
+					end = orig.Add(15 * time.Minute)
 				}
 				if fromStr != "" && start.Before(fromTime) {
 					continue

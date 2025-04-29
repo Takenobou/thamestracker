@@ -32,7 +32,6 @@ services:
       CACHE_MAX_ENTRIES: 1000
       CACHE_TTL_SECONDS: 3600
       REQUESTS_PER_MIN: 60
-      TIMEZONE: Europe/London
     depends_on:
       - redis
 
@@ -56,7 +55,6 @@ All settings via environment variables. Defaults shown:
 | `CACHE_MAX_ENTRIES`| `1000`                                                          | Max entries in in‑memory fallback cache        |
 | `CACHE_TTL_SECONDS`| `3600`                                                          | TTL for in‑memory fallback cache (sec)         |
 | `REQUESTS_PER_MIN` | `60`                                                            | Per‑IP rate‑limit (requests per minute)        |
-| `TIMEZONE`         | `Europe/London`                                                 | Timezone for timestamp conversion (IANA TZ)   |
 
 ## API Reference
 

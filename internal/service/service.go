@@ -74,9 +74,10 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 	}
 	vesselType = vt
 	var vessels []models.Vessel
-	cacheKey := "vessels_" + vesselType
+	// versioned cache key to invalidate old entries
+	cacheKey := "v2_vessels_" + vesselType
 	if vesselType == "all" {
-		cacheKey = "all_vessels"
+		cacheKey = "v2_all_vessels"
 	}
 	if err := s.Cache.Get(cacheKey, &vessels); err != nil {
 		// cache miss
@@ -101,8 +102,49 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 	return vessels, nil
 }
 
+// Add caching for filtered vessels by type and location
+func (s *Service) GetFilteredVessels(vesselType, location string) ([]models.Vessel, error) {
+	vt := strings.ToLower(vesselType)
+	// composite cache key
+	key := fmt.Sprintf("v2_vessels_%s_location_%s", vt, location)
+	var vessels []models.Vessel
+	if err := s.Cache.Get(key, &vessels); err == nil {
+		metrics.CacheHits.Inc()
+		return vessels, nil
+	}
+	metrics.CacheMisses.Inc()
+	// fetch raw list
+	raw, err := s.GetVessels(vt)
+	if err != nil {
+		return nil, err
+	}
+	// filter by location based on type
+	for _, v := range raw {
+		switch vt {
+		case "inport":
+			if v.LocationName == location {
+				vessels = append(vessels, v)
+			}
+		case "arrivals", "forecast":
+			if v.LocationTo == location {
+				vessels = append(vessels, v)
+			}
+		case "departures":
+			if v.LocationFrom == location {
+				vessels = append(vessels, v)
+			}
+		}
+	}
+	// log retrieval before caching
+	logger.Logger.Infof("Retrieved filtered vessels from API, type: %s location: %s, count: %d", vt, location, len(vessels))
+	// cache filtered results
+	if err := s.Cache.Set(key, vessels, 30*time.Minute); err != nil {
+		logger.Logger.Errorf("Failed to cache %s: %v", key, err)
+	}
+	return vessels, nil
+}
+
 // LocationStats holds aggregated stats for a location.
-// name is the canonical label, code is blank for now.
 type LocationStats struct {
 	Name       string `json:"name"`
 	Code       string `json:"code"`

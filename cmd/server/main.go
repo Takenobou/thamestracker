@@ -14,6 +14,7 @@ import (
 	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/service"
+	"github.com/Takenobou/thamestracker/internal/storage"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/joho/godotenv"
@@ -23,6 +24,8 @@ func main() {
 	_ = godotenv.Load()
 	logger.InitLogger()
 	config.LoadConfig()
+	// initialize storage cache client with loaded config
+	storage.CacheClient = cache.NewRedisCache(config.AppConfig.Redis.Address)
 
 	cacheClient := cache.NewRedisCache(config.AppConfig.Redis.Address)
 	svc := service.NewService(httpclient.DefaultClient, cacheClient)

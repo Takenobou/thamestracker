@@ -23,7 +23,6 @@ type Config struct {
 	FallbackCacheSize       int
 	FallbackCacheTTLSeconds int
 	RequestsPerMin          int
-	Timezone                string // new: timezone for timestamp conversion
 }
 
 var AppConfig Config
@@ -42,8 +41,6 @@ func NewConfig() Config {
 	cfg.FallbackCacheSize = 1000
 	cfg.FallbackCacheTTLSeconds = 3600
 	cfg.RequestsPerMin = 60
-	// default timezone
-	cfg.Timezone = "Europe/London"
 
 	// overrides
 	if portStr := os.Getenv("PORT"); portStr != "" {
@@ -85,10 +82,6 @@ func NewConfig() Config {
 		if i, err := strconv.Atoi(v); err == nil {
 			cfg.RequestsPerMin = i
 		}
-	}
-	// override timezone from environment
-	if v := os.Getenv("TIMEZONE"); v != "" {
-		cfg.Timezone = v
 	}
 
 	return cfg
