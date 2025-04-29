@@ -111,18 +111,49 @@ Returns vessel movements in JSON.
 curl -s "http://localhost:8080/vessels?type=arrivals&unique=true&after=2025-04-01T00:00:00Z" | jq .
 ```
 
-### GET /calendar.ics
-Returns an iCalendar feed combining bridge lifts and vessel events.
+### GET /bridge-lifts/calendar.ics
+Returns an iCalendar feed for Tower Bridge lift events.
 
 **Query parameters**:
-- `eventType` (string, default `all`): choose `all`, `bridge`, or `vessel` events.
+- `unique` (boolean, default `false`): remove duplicate lifts by vessel name.
+- `name` (string, optional): filter lifts by vessel name substring.
 - `from` (YYYY-MM-DD, optional): include only events starting on or after this date.
 - `to` (YYYY-MM-DD, optional): include only events starting on or before this date.
-- All `/vessels` and `/bridge-lifts` filters apply when `eventType` includes that type.
 
 **Example**:
 ```bash
-curl -s "http://localhost:8080/calendar.ics?type=departures&unique=true&from=2025-04-01&to=2025-04-07" > feed.ics
+curl -s "http://localhost:8080/bridge-lifts/calendar.ics?unique=true&from=2025-04-01&to=2025-04-07" > bridge.ics
+```
+
+### GET /vessels/calendar.ics
+Returns an iCalendar feed for vessel movements.
+
+**Query parameters**:
+- `type` (string, default `all`): one of `inport`, `arrivals`, `departures`, `forecast`, or `all`.
+- `name`, `location`, `nationality`, `after`, `before`, and `unique` (same filters as JSON `/vessels`).
+- `from` (YYYY-MM-DD, optional): include only events starting on or after this date.
+- `to` (YYYY-MM-DD, optional): include only events starting on or before this date.
+
+**Example**:
+```bash
+curl -s "http://localhost:8080/vessels/calendar.ics?type=arrivals&unique=true&from=2025-04-01&to=2025-04-07" > vessels.ics
+```
+
+### GET /docs
+Serves the OpenAPI JSON specification for the API.
+
+**Example**:
+```bash
+curl -s "http://localhost:8080/docs" | jq .
+```
+
+### GET /metrics
+Prometheus metrics endpoint, enabled only when the environment variable `METRICS_PUBLIC=true` is set.
+
+**Response**:
+```
+# HELP thamestracker_external_api_scrapes_total Total number of external API scrapes.
+... other metrics ...
 ```
 
 ### GET /healthz
@@ -136,13 +167,6 @@ or
 ```json
 { "status": "fail", "error": "health check error" }
 ```
-
-### GET /metrics
-Prometheus scrape endpoint. Exposes metrics:
-- `thamestracker_external_api_scrapes_total{api="bridge|vessels"}`
-- `thamestracker_external_api_duration_seconds{api="bridge|vessels"}`
-- `thamestracker_cache_hits_total`
-- `thamestracker_cache_misses_total`
 
 ### GET /locations
 Returns aggregated vessel counts per location.
@@ -178,8 +202,9 @@ thamestracker arrivals
 thamestracker departures
 thamestracker forecast
 
-# iCalendar feed
-thamestracker ics > feed.ics
+# iCalendar feeds
+thamestracker bridge-ics > bridge.ics
+thamestracker vessels-ics > vessels.ics
 ```
 
 ## License
