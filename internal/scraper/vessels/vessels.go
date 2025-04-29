@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/Takenobou/thamestracker/internal/config"
@@ -72,8 +71,11 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 		logger.Logger.Errorf("Error decoding API response: %v", err)
 		return nil, err
 	}
+	// summary log for fetched vessels counts
+	logger.Logger.Infof("PLA vessels fetched: inport=%d arrivals=%d departures=%d forecast=%d url=%s",
+		len(result.InPort), len(result.Arrivals), len(result.Departures), len(result.Forecast), apiURL)
 
-	var vessels []models.Vessel
+	vessels := make([]models.Vessel, 0)
 
 	// Helper function to process vessel data from a given category.
 	processVessels := func(vesselList []vesselData, category string) {
@@ -109,16 +111,22 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 				dateStr = nowLocal.Format("02/01/2006")
 				timeStr = nowLocal.Format("15:04")
 			} else {
-				// ts format "2006-01-02 15:04:05.000"
-				datePart := ts[:10]
-				timePart := ts[11:16]
-				parts := strings.Split(datePart, "-")
-				if len(parts) == 3 {
-					dateStr = parts[2] + "/" + parts[1] + "/" + parts[0]
-				} else {
-					dateStr = datePart
+				// robustly parse timestamp with or without milliseconds
+				layouts := []string{"2006-01-02 15:04:05.000", "2006-01-02 15:04:05"}
+				var t time.Time
+				var parseErr error
+				for _, layout := range layouts {
+					t, parseErr = time.Parse(layout, ts)
+					if parseErr == nil {
+						break
+					}
 				}
-				timeStr = timePart
+				if parseErr != nil {
+					logger.Logger.Warnf("Timestamp parse failed for vessel %s: %v, using now()", item.VesselName, parseErr)
+					t = time.Now()
+				}
+				dateStr = t.Format("02/01/2006")
+				timeStr = t.Format("15:04")
 			}
 
 			vessels = append(vessels, models.Vessel{

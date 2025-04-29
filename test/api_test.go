@@ -2,6 +2,7 @@ package test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/Takenobou/thamestracker/internal/models"
 	"github.com/Takenobou/thamestracker/internal/service"
 	"github.com/gofiber/fiber/v2"
+	"github.com/sony/gobreaker"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -32,7 +34,7 @@ func (f fakeService) GetVessels(vesselType string) ([]models.Vessel, error) {
 }
 
 // Add HealthCheck to fakeService for healthz endpoint testing
-func (f fakeService) HealthCheck() error { return nil }
+func (f fakeService) HealthCheck(ctx context.Context) error { return nil }
 
 // Add ListLocations to fakeService
 func (f fakeService) ListLocations() ([]service.LocationStats, error) {
@@ -52,7 +54,7 @@ type failingService struct{}
 
 func (f failingService) GetBridgeLifts() ([]models.BridgeLift, error)          { return nil, nil }
 func (f failingService) GetVessels(vesselType string) ([]models.Vessel, error) { return nil, nil }
-func (f failingService) HealthCheck() error                                    { return fmt.Errorf("unhealthy") }
+func (f failingService) HealthCheck(ctx context.Context) error                 { return fmt.Errorf("unhealthy") }
 func (f failingService) ListLocations() ([]service.LocationStats, error) {
 	return nil, fmt.Errorf("fail")
 }
@@ -60,6 +62,25 @@ func (f failingService) ListLocations() ([]service.LocationStats, error) {
 // Add GetFilteredVessels to failingService
 func (f failingService) GetFilteredVessels(vesselType, location string) ([]models.Vessel, error) {
 	return f.GetVessels(vesselType)
+}
+
+// fake service that simulates circuit breaker open
+type openBreakerService struct{}
+
+func (s openBreakerService) GetBridgeLifts() ([]models.BridgeLift, error) {
+	return nil, gobreaker.ErrOpenState
+}
+func (s openBreakerService) GetVessels(vesselType string) ([]models.Vessel, error) {
+	return nil, gobreaker.ErrOpenState
+}
+func (s openBreakerService) GetFilteredVessels(vesselType, location string) ([]models.Vessel, error) {
+	return nil, gobreaker.ErrOpenState
+}
+func (s openBreakerService) HealthCheck(ctx context.Context) error {
+	return gobreaker.ErrOpenState
+}
+func (s openBreakerService) ListLocations() ([]service.LocationStats, error) {
+	return nil, gobreaker.ErrOpenState
 }
 
 func TestGetBridgeLiftsEndpoint(t *testing.T) {
@@ -80,6 +101,18 @@ func TestGetBridgeLiftsEndpoint(t *testing.T) {
 	assert.Equal(t, "Fake Bridge Lift", lifts[0].Vessel)
 }
 
+func TestGetBridgeLifts_CircuitBreakerOpen(t *testing.T) {
+	handler := api.NewAPIHandler(openBreakerService{})
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/bridge-lifts", nil)
+	resp, _ := app.Test(req)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	retry := resp.Header.Get("Retry-After")
+	assert.NotEmpty(t, retry)
+}
+
 func TestGetVesselsEndpoint(t *testing.T) {
 	svc := fakeService{}
 	handler := api.NewAPIHandler(svc)
@@ -98,6 +131,47 @@ func TestGetVesselsEndpoint(t *testing.T) {
 	assert.Equal(t, "Fake Vessel", vessels[0].Name)
 }
 
+func TestGetVessels_CircuitBreakerOpen(t *testing.T) {
+	handler := api.NewAPIHandler(openBreakerService{})
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/vessels?type=inport", nil)
+	resp, _ := app.Test(req)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	retry := resp.Header.Get("Retry-After")
+	assert.NotEmpty(t, retry)
+}
+
+func TestGetVessels_InvalidType(t *testing.T) {
+	handler := api.NewAPIHandler(fakeService{})
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/vessels?type=invalid", nil)
+	resp, _ := app.Test(req)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	var result map[string]string
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+	assert.Contains(t, result["error"], "invalid type")
+}
+
+func TestGetVessels_InvalidAfterBefore(t *testing.T) {
+	handler := api.NewAPIHandler(fakeService{})
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	// invalid after
+	req1 := httptest.NewRequest(http.MethodGet, "/vessels?type=inport&after=bad", nil)
+	resp1, _ := app.Test(req1)
+	assert.Equal(t, http.StatusBadRequest, resp1.StatusCode)
+
+	// invalid before
+	req2 := httptest.NewRequest(http.MethodGet, "/vessels?type=inport&before=bad", nil)
+	resp2, _ := app.Test(req2)
+	assert.Equal(t, http.StatusBadRequest, resp2.StatusCode)
+}
+
 func TestCalendarEndpoint(t *testing.T) {
 	svc := fakeService{}
 	handler := api.NewAPIHandler(svc)
@@ -113,6 +187,18 @@ func TestCalendarEndpoint(t *testing.T) {
 	n, _ := resp.Body.Read(buf)
 	body := string(buf[:n])
 	assert.Contains(t, body, "BEGIN:VCALENDAR")
+}
+
+func TestCalendar_CircuitBreakerOpen(t *testing.T) {
+	handler := api.NewAPIHandler(openBreakerService{})
+	app := fiber.New()
+	api.SetupRoutes(app, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/calendar.ics?type=bridge", nil)
+	resp, _ := app.Test(req)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	retry := resp.Header.Get("Retry-After")
+	assert.NotEmpty(t, retry)
 }
 
 func TestHealthzEndpoint_Success(t *testing.T) {

@@ -28,7 +28,11 @@ func main() {
 	storage.CacheClient = cache.NewRedisCache(config.AppConfig.Redis.Address)
 
 	cacheClient := cache.NewRedisCache(config.AppConfig.Redis.Address)
-	svc := service.NewService(httpclient.DefaultClient, cacheClient)
+	// wrap HTTP client in circuit breaker
+	breakerClient := httpclient.NewBreakerClient(httpclient.DefaultClient,
+		config.AppConfig.CircuitBreaker.MaxFailures,
+		config.AppConfig.CircuitBreaker.CoolOffSeconds)
+	svc := service.NewService(breakerClient, cacheClient)
 	handler := api.NewAPIHandler(svc)
 
 	app := fiber.New()
@@ -59,10 +63,10 @@ func main() {
 		logger.Logger.Infof("Shutdown signal received, shutting down gracefully...")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if err := app.Shutdown(); err != nil {
+		// use ShutdownWithContext to respect timeout and exit promptly
+		if err := app.ShutdownWithContext(ctx); err != nil {
 			logger.Logger.Errorf("Error during server shutdown: %v", err)
 		}
-		<-ctx.Done()
 		logger.Logger.Infof("Server has been shut down.")
 		os.Exit(0)
 	}()

@@ -1,0 +1,51 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "ThamesTracker API",
+    "version": "v1"
+  },
+  "paths": {
+    "/bridge-lifts": {
+      "get": {
+        "responses": {
+          "200": { "description": "Successful response with list of bridge lifts" }
+        }
+      }
+    },
+    "/vessels": {
+      "get": {
+        "responses": {
+          "200": { "description": "Successful response with list of vessels" }
+        }
+      }
+    },
+    "/calendar.ics": {
+      "get": {
+        "responses": {
+          "200": { "description": "iCalendar feed" }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    },
+    "/locations": {
+      "get": {
+        "responses": {
+          "200": { "description": "Successful response with location stats" }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "responses": {
+          "200": { "description": "Prometheus metrics" }
+        }
+      }
+    }
+  }
+}

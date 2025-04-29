@@ -51,9 +51,16 @@ var (
 			Buckets: prometheus.DefBuckets,
 		},
 	)
+	// RedisErrorsTotal counts Redis errors.
+	RedisErrorsTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "thamestracker_redis_errors_total",
+			Help: "Total number of Redis errors.",
+		},
+	)
 )
 
 func init() {
 	prometheus.MustRegister(ScrapeCounter, ScrapeDuration, CacheHits, CacheMisses,
-		LocationsRequests, LocationsRequestDuration)
+		LocationsRequests, LocationsRequestDuration, RedisErrorsTotal)
 }

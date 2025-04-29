@@ -24,6 +24,8 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 
 	c := colly.NewCollector()
 	var lifts []models.BridgeLift
+	// track pagination detection
+	foundPager := false
 
 	// Scrape lift data.
 	c.OnHTML("tbody tr", func(e *colly.HTMLElement) {
@@ -52,6 +54,7 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 
 	// Handle pagination.
 	c.OnHTML("nav.pager a[title='Current page']", func(e *colly.HTMLElement) {
+		foundPager = true
 		nextPage := e.DOM.Parent().Next().Find("a").AttrOr("href", "")
 		if nextPage != "" {
 			baseParsed, err := url.Parse(baseURL)
@@ -83,6 +86,9 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 	}
 
 	c.Wait()
+	if !foundPager {
+		logger.Logger.Warnf("Bridge scraper: missing pagination link, structure may have changed")
+	}
 	logger.Logger.Infof("Retrieved bridge lifts from API, count: %d", len(lifts))
 	return lifts, nil
 }

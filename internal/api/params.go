@@ -30,7 +30,7 @@ func ParseQueryOptions(c *fiber.Ctx) QueryOptions {
 		Location:   strings.ToLower(c.Query("location", "")),
 		VesselType: strings.ToLower(c.Query("type", "all")),
 	}
-	opts.Unique = c.Query("unique", "false") == "true"
+	opts.Unique = strings.EqualFold(c.Query("unique", "false"), "true")
 	opts.Name = strings.ToLower(c.Query("name", ""))
 	opts.Nationality = strings.ToLower(c.Query("nationality", ""))
 	opts.After = c.Query("after", "")

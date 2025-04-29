@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -23,6 +24,7 @@ type Config struct {
 	FallbackCacheSize       int
 	FallbackCacheTTLSeconds int
 	RequestsPerMin          int
+	MetricsPublic           bool
 }
 
 var AppConfig Config
@@ -41,6 +43,8 @@ func NewConfig() Config {
 	cfg.FallbackCacheSize = 1000
 	cfg.FallbackCacheTTLSeconds = 3600
 	cfg.RequestsPerMin = 60
+	// metrics endpoint protection default
+	cfg.MetricsPublic = false
 
 	// overrides
 	if portStr := os.Getenv("PORT"); portStr != "" {
@@ -82,6 +86,10 @@ func NewConfig() Config {
 		if i, err := strconv.Atoi(v); err == nil {
 			cfg.RequestsPerMin = i
 		}
+	}
+	// optional metrics public flag
+	if mp := os.Getenv("METRICS_PUBLIC"); mp != "" {
+		cfg.MetricsPublic = strings.EqualFold(mp, "true")
 	}
 
 	return cfg

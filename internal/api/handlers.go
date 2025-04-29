@@ -1,11 +1,15 @@
 package api
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	calendar "github.com/Takenobou/thamestracker/internal/calendar"
+	"github.com/Takenobou/thamestracker/internal/config"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/helpers/metrics"
 	"github.com/Takenobou/thamestracker/internal/helpers/utils"
@@ -14,13 +18,14 @@ import (
 	ics "github.com/arran4/golang-ical"
 	"github.com/gofiber/fiber/v2"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sony/gobreaker"
 )
 
 type ServiceInterface interface {
 	GetBridgeLifts() ([]models.BridgeLift, error)
 	GetVessels(vesselType string) ([]models.Vessel, error)
 	GetFilteredVessels(vesselType, location string) ([]models.Vessel, error)
-	HealthCheck() error
+	HealthCheck(ctx context.Context) error
 	ListLocations() ([]service.LocationStats, error)
 }
 
@@ -36,6 +41,11 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
 	lifts, err := h.svc.GetBridgeLifts()
 	if err != nil {
+		// circuit breaker open -> 503 with Retry-After
+		if errors.Is(err, gobreaker.ErrOpenState) {
+			c.Set("Retry-After", strconv.Itoa(config.AppConfig.CircuitBreaker.CoolOffSeconds))
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service temporarily unavailable"})
+		}
 		logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve bridge lift data"})
 	}
@@ -50,11 +60,36 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 
 func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
+	// validate vessel type early for client errors
+	validTypes := map[string]bool{"all": true, "inport": true, "arrivals": true, "departures": true, "forecast": true}
+	if !validTypes[opts.VesselType] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": fmt.Sprintf("invalid type: %s", opts.VesselType)})
+	}
+	// parse and validate after/before filters
+	if opts.After != "" {
+		if _, err := time.Parse(time.RFC3339, opts.After); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid after parameter"})
+		}
+	}
+	if opts.Before != "" {
+		if _, err := time.Parse(time.RFC3339, opts.Before); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid before parameter"})
+		}
+	}
 	// fetch and cache filtered vessels by type and location
 	vessels, err := h.svc.GetFilteredVessels(opts.VesselType, opts.Location)
 	if err != nil {
+		// circuit breaker open -> 503
+		if errors.Is(err, gobreaker.ErrOpenState) {
+			c.Set("Retry-After", strconv.Itoa(config.AppConfig.CircuitBreaker.CoolOffSeconds))
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service temporarily unavailable"})
+		}
+		// map invalid type errors to 400
+		if strings.HasPrefix(err.Error(), "invalid vesselType") {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
 		logger.Logger.Errorf("Error fetching vessel data: %v", err)
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve vessel data"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve vessel data"})
 	}
 	// Apply JSON endpoint filters: name, nationality, after, before
 	vessels = utils.FilterVessels(vessels, c)
@@ -79,21 +114,30 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 	toStr := c.Query("to", "")
 	var fromTime, toTime, toEnd time.Time
 	if fromStr != "" {
-		if ft, err := time.Parse("2006-01-02", fromStr); err == nil {
-			fromTime = ft
+		ft, err := time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid from parameter"})
 		}
+		fromTime = ft
 	}
 	if toStr != "" {
-		if tt, err := time.Parse("2006-01-02", toStr); err == nil {
-			toTime = tt
-			toEnd = toTime.Add(24 * time.Hour)
+		tt, err := time.Parse("2006-01-02", toStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid to parameter"})
 		}
+		toTime = tt
+		toEnd = toTime.Add(24 * time.Hour)
 	}
 
 	// Bridge events (only when explicitly requested)
 	if opts.EventType == "bridge" {
 		lifts, err := h.svc.GetBridgeLifts()
 		if err != nil {
+			// circuit breaker open -> 503
+			if errors.Is(err, gobreaker.ErrOpenState) {
+				c.Set("Retry-After", strconv.Itoa(config.AppConfig.CircuitBreaker.CoolOffSeconds))
+				return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service temporarily unavailable"})
+			}
 			logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
 		} else {
 			if opts.Unique {
@@ -121,6 +165,11 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 	if opts.EventType != "bridge" {
 		vessels, err := h.svc.GetVessels(opts.VesselType)
 		if err != nil {
+			// circuit breaker open -> 503
+			if errors.Is(err, gobreaker.ErrOpenState) {
+				c.Set("Retry-After", strconv.Itoa(config.AppConfig.CircuitBreaker.CoolOffSeconds))
+				return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service temporarily unavailable"})
+			}
 			logger.Logger.Errorf("Error fetching vessel data: %v", err)
 		} else {
 			vessels = utils.FilterVessels(vessels, c)
@@ -159,7 +208,7 @@ func (h *APIHandler) CalendarHandler(c *fiber.Ctx) error {
 
 // Healthz returns 200 OK if dependencies are healthy, 503 otherwise.
 func (h *APIHandler) Healthz(c *fiber.Ctx) error {
-	if err := h.svc.HealthCheck(); err != nil {
+	if err := h.svc.HealthCheck(c.UserContext()); err != nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"status": "fail", "error": err.Error()})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})

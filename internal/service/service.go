@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Takenobou/thamestracker/internal/config"
@@ -29,6 +31,17 @@ func NewService(httpClient httpclient.Client, cache cache.Cache) *Service {
 		HTTPClient: httpClient,
 		Cache:      cache,
 	}
+}
+
+// singleton redis client for reuse
+var redisClientSingleton *redis.Client
+var redisOnce sync.Once
+
+func getRedisClient() *redis.Client {
+	redisOnce.Do(func() {
+		redisClientSingleton = redis.NewClient(&redis.Options{Addr: config.AppConfig.Redis.Address})
+	})
+	return redisClientSingleton
 }
 
 func (s *Service) GetBridgeLifts() ([]models.BridgeLift, error) {
@@ -75,9 +88,9 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 	vesselType = vt
 	var vessels []models.Vessel
 	// versioned cache key to invalidate old entries
-	cacheKey := "v2_vessels_" + vesselType
+	cacheKey := "v3_vessels_" + vesselType
 	if vesselType == "all" {
-		cacheKey = "v2_all_vessels"
+		cacheKey = "v3_all_vessels"
 	}
 	if err := s.Cache.Get(cacheKey, &vessels); err != nil {
 		// cache miss
@@ -105,9 +118,14 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 // Add caching for filtered vessels by type and location
 func (s *Service) GetFilteredVessels(vesselType, location string) ([]models.Vessel, error) {
 	vt := strings.ToLower(vesselType)
+	// Fast-path: no location filter OR type==all → just return the raw list
+	if strings.TrimSpace(location) == "" || vt == "all" {
+		return s.GetVessels(vt)
+	}
 	// composite cache key
-	key := fmt.Sprintf("v2_vessels_%s_location_%s", vt, location)
-	var vessels []models.Vessel
+	key := fmt.Sprintf("v3_vessels_%s_location_%s", vt, location)
+	// initialize slice to avoid nil
+	vessels := make([]models.Vessel, 0)
 	if err := s.Cache.Get(key, &vessels); err == nil {
 		metrics.CacheHits.Inc()
 		return vessels, nil
@@ -122,15 +140,15 @@ func (s *Service) GetFilteredVessels(vesselType, location string) ([]models.Vess
 	for _, v := range raw {
 		switch vt {
 		case "inport":
-			if v.LocationName == location {
+			if strings.EqualFold(v.LocationName, location) {
 				vessels = append(vessels, v)
 			}
 		case "arrivals", "forecast":
-			if v.LocationTo == location {
+			if strings.EqualFold(v.LocationTo, location) {
 				vessels = append(vessels, v)
 			}
 		case "departures":
-			if v.LocationFrom == location {
+			if strings.EqualFold(v.LocationFrom, location) {
 				vessels = append(vessels, v)
 			}
 		}
@@ -208,22 +226,26 @@ func (s *Service) ListLocations() ([]LocationStats, error) {
 	return list, nil
 }
 
-func (s *Service) HealthCheck() error {
-	// Ping Redis
-	rdb := redis.NewClient(&redis.Options{Addr: config.AppConfig.Redis.Address})
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
+func (s *Service) HealthCheck(ctx context.Context) error {
+	// Ping Redis with context cancellation support
+	rdb := getRedisClient()
+	if err := rdb.Ping(ctx).Err(); err != nil {
 		return fmt.Errorf("redis ping failed: %w", err)
 	}
-	// Check Port of London API with GET (HEAD not supported by client interface)
-	resp, err := s.HTTPClient.Get(config.AppConfig.URLs.PortOfLondon)
+	// Check external API via HEAD with context
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, config.AppConfig.URLs.PortOfLondon, nil)
 	if err != nil {
-		return fmt.Errorf("external API GET failed: %w", err)
+		return fmt.Errorf("creating HEAD request failed: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("external API HEAD failed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("external API returned status %d", resp.StatusCode)
 	}
-	// also check ListLocations returns without error
+	// also ensure ListLocations works
 	if _, err := s.ListLocations(); err != nil {
 		return fmt.Errorf("ListLocations health check failed: %w", err)
 	}

@@ -42,16 +42,19 @@ func RequestLogger() fiber.Handler {
 		err := c.Next()
 		latency := time.Since(start).Milliseconds()
 
-		// Structured log
-		Logger.Infow("http_request",
+		// Structured log: only include error when non-nil
+		fields := []interface{}{
 			"module", "api",
 			"request_id", reqID,
 			"method", c.Method(),
 			"path", c.OriginalURL(),
 			"status", c.Response().StatusCode(),
 			"latency_ms", latency,
-			"error", err,
-		)
+		}
+		if err != nil {
+			fields = append(fields, "error", err)
+		}
+		Logger.Infow("http_request", fields...)
 		return err
 	}
 }

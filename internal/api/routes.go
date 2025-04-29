@@ -2,7 +2,10 @@ package api
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 
+	"github.com/Takenobou/thamestracker/internal/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
@@ -17,6 +20,10 @@ func SetupRoutes(app *fiber.App, handler *APIHandler) {
 	app.Get("/locations", handler.GetLocations)
 	// Prometheus metrics endpoint
 	app.Get("/metrics", func(c *fiber.Ctx) error {
+		// gate metrics endpoint based on config
+		if !config.AppConfig.MetricsPublic {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Metrics endpoint is disabled"})
+		}
 		mfs, err := prometheus.DefaultGatherer.Gather()
 		if err != nil {
 			return c.Status(500).SendString(err.Error())
@@ -27,5 +34,15 @@ func SetupRoutes(app *fiber.App, handler *APIHandler) {
 		}
 		c.Set("Content-Type", "text/plain; version=0.0.4")
 		return c.SendString(buf.String())
+	})
+	// Serve OpenAPI spec
+	app.Get("/docs", func(c *fiber.Ctx) error {
+		specPath := filepath.Join("docs", "openapi.json")
+		data, err := os.ReadFile(specPath)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load OpenAPI spec"})
+		}
+		c.Set("Content-Type", "application/json")
+		return c.Send(data)
 	})
 }
