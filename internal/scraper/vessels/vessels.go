@@ -146,6 +146,3 @@ func ScrapeVessels(vesselType string) ([]models.Event, error) {
 	logger.Logger.Infof("Retrieved vessel events from API, count: %d, vesselType: %s", len(events), vesselType)
 	return events, nil
 }
-
-// Deprecated: old ScrapeVessels returning []Vessel. Remove after migration.
-// func ScrapeVesselsOld(vesselType string) ([]models.Vessel, error) { ... }
