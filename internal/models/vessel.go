@@ -1,6 +1,6 @@
 package models
 
-// Vessel represents a generic vessel movement.
+// Deprecated: use Event instead.
 type Vessel struct {
 	Time         string `json:"time"`
 	Date         string `json:"date"`

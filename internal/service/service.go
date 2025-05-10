@@ -45,41 +45,32 @@ func getRedisClient() *redis.Client {
 	return redisClientSingleton
 }
 
-func (s *Service) GetBridgeLifts() ([]models.BridgeLift, error) {
-	var lifts []models.BridgeLift
-	// use centralized cache key
+// GetBridgeLifts returns bridge lift events as []Event.
+func (s *Service) GetBridgeLifts() ([]models.Event, error) {
+	var events []models.Event
 	key := keycache.KeyBridgeLifts()
-	// try cache
-	if err := s.Cache.Get(key, &lifts); err != nil {
-		// cache miss
+	if err := s.Cache.Get(key, &events); err != nil {
 		metrics.CacheMisses.Inc()
-		// record scrape metrics
 		timer := prometheus.NewTimer(metrics.ScrapeDuration.WithLabelValues("bridge"))
 		metrics.ScrapeCounter.WithLabelValues("bridge").Inc()
-		l, err2 := s.getBridgeLiftsFromScraper()
+		l, err2 := bridgeScraper.ScrapeBridgeLifts()
 		timer.ObserveDuration()
 		if err2 != nil {
 			return nil, err2
 		}
-		lifts = l
-		if err3 := s.Cache.Set(key, lifts, 15*time.Minute); err3 != nil {
+		events = l
+		if err3 := s.Cache.Set(key, events, 15*time.Minute); err3 != nil {
 			logger.Logger.Errorf("Failed to cache bridge_lifts: %v", err3)
 			return nil, err3
 		}
 	} else {
-		// cache hit
 		metrics.CacheHits.Inc()
 	}
-	return lifts, nil
+	return events, nil
 }
 
-func (s *Service) getBridgeLiftsFromScraper() ([]models.BridgeLift, error) {
-	// Separate helper if needed; here we call the scraper directly.
-	return bridgeScraper.ScrapeBridgeLifts()
-}
-
-func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
-	// Validate vesselType to prevent cache-key injection
+// GetVessels returns vessel events as []Event.
+func (s *Service) GetVessels(vesselType string) ([]models.Event, error) {
 	vt := strings.ToLower(vesselType)
 	switch vt {
 	case "inport", "arrivals", "departures", "forecast", "all":
@@ -88,13 +79,10 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 		return nil, fmt.Errorf("invalid vesselType: %s", vesselType)
 	}
 	vesselType = vt
-	var vessels []models.Vessel
-	// cache key for vessels
+	var events []models.Event
 	key := keycache.KeyVessels(vesselType)
-	if err := s.Cache.Get(key, &vessels); err != nil {
-		// cache miss
+	if err := s.Cache.Get(key, &events); err != nil {
 		metrics.CacheMisses.Inc()
-		// record scrape metrics
 		timer := prometheus.NewTimer(metrics.ScrapeDuration.WithLabelValues("vessels"))
 		metrics.ScrapeCounter.WithLabelValues("vessels").Inc()
 		data, err2 := vesselScraper.ScrapeVessels(vesselType)
@@ -102,63 +90,47 @@ func (s *Service) GetVessels(vesselType string) ([]models.Vessel, error) {
 		if err2 != nil {
 			return nil, err2
 		}
-		vessels = data
-		if err3 := s.Cache.Set(key, vessels, 30*time.Minute); err3 != nil {
+		events = data
+		if err3 := s.Cache.Set(key, events, 30*time.Minute); err3 != nil {
 			logger.Logger.Errorf("Failed to cache %s: %v", key, err3)
 			return nil, err3
 		}
 	} else {
-		// cache hit
 		metrics.CacheHits.Inc()
 	}
-	return vessels, nil
+	return events, nil
 }
 
 // Add caching for filtered vessels by type and location
-func (s *Service) GetFilteredVessels(vesselType, location string) ([]models.Vessel, error) {
+func (s *Service) GetFilteredVessels(vesselType, location string) ([]models.Event, error) {
 	vt := strings.ToLower(vesselType)
-	// Fast-path: no location filter OR type==all → just return the raw list
 	if strings.TrimSpace(location) == "" || vt == "all" {
 		return s.GetVessels(vt)
 	}
-	// composite cache key for filtered vessels
 	key := keycache.KeyVesselsByLoc(vt, location)
-	// initialize slice to avoid nil
-	vessels := make([]models.Vessel, 0)
-	if err := s.Cache.Get(key, &vessels); err == nil {
+	events := make([]models.Event, 0)
+	if err := s.Cache.Get(key, &events); err == nil {
 		metrics.CacheHits.Inc()
-		return vessels, nil
+		return events, nil
 	}
 	metrics.CacheMisses.Inc()
-	// fetch raw list
 	raw, err := s.GetVessels(vt)
 	if err != nil {
 		return nil, err
 	}
-	// filter by location based on type
-	for _, v := range raw {
-		switch vt {
-		case "inport":
-			if strings.EqualFold(v.LocationName, location) {
-				vessels = append(vessels, v)
-			}
-		case "arrivals", "forecast":
-			if strings.EqualFold(v.LocationTo, location) {
-				vessels = append(vessels, v)
-			}
-		case "departures":
-			if strings.EqualFold(v.LocationFrom, location) {
-				vessels = append(vessels, v)
-			}
+	filtered := make([]models.Event, 0)
+	for _, e := range raw {
+		if strings.EqualFold(e.Location, location) ||
+			strings.EqualFold(e.From, location) ||
+			strings.EqualFold(e.To, location) {
+			filtered = append(filtered, e)
 		}
 	}
-	// log retrieval before caching
-	logger.Logger.Infof("Retrieved filtered vessels from API, type: %s location: %s, count: %d", vt, location, len(vessels))
-	// cache filtered results
-	if err := s.Cache.Set(key, vessels, 30*time.Minute); err != nil {
+	logger.Logger.Infof("Retrieved filtered events from API, type: %s location: %s, count: %d", vt, location, len(filtered))
+	if err := s.Cache.Set(key, filtered, 30*time.Minute); err != nil {
 		logger.Logger.Errorf("Failed to cache %s: %v", key, err)
 	}
-	return vessels, nil
+	return filtered, nil
 }
 
 // LocationStats holds aggregated stats for a location.
@@ -172,25 +144,24 @@ type LocationStats struct {
 	Total      int    `json:"total"`
 }
 
-// ListLocations aggregates vessel counts by location.
+// ListLocations aggregates event counts by location.
 func (s *Service) ListLocations() ([]LocationStats, error) {
-	vessels, err := s.GetVessels("all")
+	events, err := s.GetVessels("all")
 	if err != nil {
 		return nil, err
 	}
 	statsMap := make(map[string]*LocationStats)
-	for _, v := range vessels {
+	for _, e := range events {
 		var name string
-		// choose location field based on vessel type
-		switch v.Type {
+		switch e.Category {
 		case "inport":
-			name = v.LocationName
+			name = e.Location
 		case "arrivals":
-			name = v.LocationTo
+			name = e.To
 		case "departures":
-			name = v.LocationFrom
+			name = e.From
 		case "forecast":
-			name = v.LocationTo
+			name = e.To
 		default:
 			continue
 		}
@@ -201,7 +172,7 @@ func (s *Service) ListLocations() ([]LocationStats, error) {
 			statsMap[name] = &LocationStats{Name: name, Code: ""}
 		}
 		stat := statsMap[name]
-		switch v.Type {
+		switch e.Category {
 		case "inport":
 			stat.Inport++
 		case "arrivals":
@@ -212,13 +183,11 @@ func (s *Service) ListLocations() ([]LocationStats, error) {
 			stat.Forecast++
 		}
 	}
-	// compute totals and assemble slice
 	var list []LocationStats
 	for _, stat := range statsMap {
 		stat.Total = stat.Inport + stat.Arrivals + stat.Departures + stat.Forecast
 		list = append(list, *stat)
 	}
-	// sort by total desc
 	sort.Slice(list, func(i, j int) bool {
 		return list[i].Total > list[j].Total
 	})

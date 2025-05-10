@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Takenobou/thamestracker/internal/api"
 	"github.com/Takenobou/thamestracker/internal/models"
@@ -21,22 +22,32 @@ import (
 // fakeService implements the ServiceInterface for testing.
 type fakeService struct{}
 
-func (f fakeService) GetBridgeLifts() ([]models.BridgeLift, error) {
-	return []models.BridgeLift{
-		{Date: "2025-04-05", Time: "17:45", Vessel: "Fake Bridge Lift", Direction: "Up river"},
+func (f fakeService) GetBridgeLifts() ([]models.Event, error) {
+	return []models.Event{
+		{
+			Timestamp:  time.Date(2025, 4, 5, 17, 45, 0, 0, time.UTC),
+			VesselName: "Fake Bridge Lift",
+			Category:   "bridge",
+			Direction:  "Up river",
+			Location:   "Tower Bridge Road, London",
+		},
 	}, nil
 }
 
-func (f fakeService) GetVessels(vesselType string) ([]models.Vessel, error) {
-	return []models.Vessel{
-		{Time: "20:33", Date: "25/01/2025", LocationName: "Fake Port", Name: "Fake Vessel", VoyageNo: "F123", Type: vesselType},
+func (f fakeService) GetVessels(vesselType string) ([]models.Event, error) {
+	return []models.Event{
+		{
+			Timestamp:  time.Date(2025, 1, 25, 20, 33, 0, 0, time.UTC),
+			VesselName: "Fake Vessel",
+			Category:   vesselType,
+			VoyageNo:   "F123",
+			Location:   "Fake Port",
+		},
 	}, nil
 }
 
-// Add HealthCheck to fakeService for healthz endpoint testing
 func (f fakeService) HealthCheck(ctx context.Context) error { return nil }
 
-// Add ListLocations to fakeService
 func (f fakeService) ListLocations() ([]service.LocationStats, error) {
 	return []service.LocationStats{
 		{Name: "PortA", Code: "", Inport: 1, Arrivals: 2, Departures: 3, Total: 6},
@@ -44,36 +55,34 @@ func (f fakeService) ListLocations() ([]service.LocationStats, error) {
 	}, nil
 }
 
-// Add GetFilteredVessels to fakeService
-func (f fakeService) GetFilteredVessels(vesselType, location string) ([]models.Vessel, error) {
+func (f fakeService) GetFilteredVessels(vesselType, location string) ([]models.Event, error) {
 	return f.GetVessels(vesselType)
 }
 
 // failingService implements ServiceInterface with a failing HealthCheck.
 type failingService struct{}
 
-func (f failingService) GetBridgeLifts() ([]models.BridgeLift, error)          { return nil, nil }
-func (f failingService) GetVessels(vesselType string) ([]models.Vessel, error) { return nil, nil }
-func (f failingService) HealthCheck(ctx context.Context) error                 { return fmt.Errorf("unhealthy") }
+func (f failingService) GetBridgeLifts() ([]models.Event, error)              { return nil, nil }
+func (f failingService) GetVessels(vesselType string) ([]models.Event, error) { return nil, nil }
+func (f failingService) HealthCheck(ctx context.Context) error                { return fmt.Errorf("unhealthy") }
 func (f failingService) ListLocations() ([]service.LocationStats, error) {
 	return nil, fmt.Errorf("fail")
 }
 
-// Add GetFilteredVessels to failingService
-func (f failingService) GetFilteredVessels(vesselType, location string) ([]models.Vessel, error) {
+func (f failingService) GetFilteredVessels(vesselType, location string) ([]models.Event, error) {
 	return f.GetVessels(vesselType)
 }
 
 // fake service that simulates circuit breaker open
 type openBreakerService struct{}
 
-func (s openBreakerService) GetBridgeLifts() ([]models.BridgeLift, error) {
+func (s openBreakerService) GetBridgeLifts() ([]models.Event, error) {
 	return nil, gobreaker.ErrOpenState
 }
-func (s openBreakerService) GetVessels(vesselType string) ([]models.Vessel, error) {
+func (s openBreakerService) GetVessels(vesselType string) ([]models.Event, error) {
 	return nil, gobreaker.ErrOpenState
 }
-func (s openBreakerService) GetFilteredVessels(vesselType, location string) ([]models.Vessel, error) {
+func (s openBreakerService) GetFilteredVessels(vesselType, location string) ([]models.Event, error) {
 	return nil, gobreaker.ErrOpenState
 }
 func (s openBreakerService) HealthCheck(ctx context.Context) error {
@@ -94,11 +103,11 @@ func TestGetBridgeLiftsEndpoint(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var lifts []models.BridgeLift
+	var lifts []models.Event
 	err = json.NewDecoder(resp.Body).Decode(&lifts)
 	assert.NoError(t, err)
 	assert.Len(t, lifts, 1)
-	assert.Equal(t, "Fake Bridge Lift", lifts[0].Vessel)
+	assert.Equal(t, "Fake Bridge Lift", lifts[0].VesselName)
 }
 
 func TestGetBridgeLifts_CircuitBreakerOpen(t *testing.T) {
@@ -124,11 +133,11 @@ func TestGetVesselsEndpoint(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var vessels []models.Vessel
+	var vessels []models.Event
 	err = json.NewDecoder(resp.Body).Decode(&vessels)
 	assert.NoError(t, err)
 	assert.Len(t, vessels, 1)
-	assert.Equal(t, "Fake Vessel", vessels[0].Name)
+	assert.Equal(t, "Fake Vessel", vessels[0].VesselName)
 }
 
 func TestGetVessels_CircuitBreakerOpen(t *testing.T) {
@@ -285,7 +294,7 @@ func TestVesselsJSONAndICACountParity(t *testing.T) {
 		reqJSON := httptest.NewRequest(http.MethodGet, "/vessels"+q, nil)
 		respJSON, err := app.Test(reqJSON)
 		assert.NoError(t, err)
-		var vessels []models.Vessel
+		var vessels []models.Event
 		err = json.NewDecoder(respJSON.Body).Decode(&vessels)
 		assert.NoError(t, err)
 		countJSON := len(vessels)

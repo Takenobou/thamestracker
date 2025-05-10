@@ -23,13 +23,13 @@ import (
 
 // BridgeSvc defines interface for bridge lift methods.
 type BridgeSvc interface {
-	GetBridgeLifts() ([]models.BridgeLift, error)
+	GetBridgeLifts() ([]models.Event, error)
 }
 
 // VesselSvc defines interface for vessel methods.
 type VesselSvc interface {
-	GetVessels(vesselType string) ([]models.Vessel, error)
-	GetFilteredVessels(vesselType, location string) ([]models.Vessel, error)
+	GetVessels(vesselType string) ([]models.Event, error)
+	GetFilteredVessels(vesselType, location string) ([]models.Event, error)
 }
 
 // HealthSvc defines interface for health check.
@@ -65,9 +65,8 @@ func NewAPIHandler(svc ServiceInterface) *APIHandler {
 
 func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
-	lifts, err := h.bridge.GetBridgeLifts()
+	events, err := h.bridge.GetBridgeLifts()
 	if err != nil {
-		// circuit breaker open -> 503 with Retry-After
 		if errors.Is(err, gobreaker.ErrOpenState) {
 			c.Set("Retry-After", strconv.Itoa(config.AppConfig.CircuitBreaker.CoolOffSeconds))
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service temporarily unavailable"})
@@ -75,23 +74,24 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 		logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve bridge lift data"})
 	}
-	// Apply unique filtering if requested.
-	if opts.Unique {
-		lifts = utils.FilterUniqueLifts(lifts, 4)
-	}
-	// Name filtering if specified.
-	lifts = utils.FilterBridgeLiftsByName(lifts, opts.Name)
-	return c.JSON(lifts)
+	// Filter events for bridge category
+	filtered := utils.FilterEvents(events, utils.FilterOptions{
+		Name:     opts.Name,
+		Category: "bridge",
+		After:    opts.After,
+		Before:   opts.Before,
+		Unique:   opts.Unique,
+		Location: opts.Location,
+	})
+	return c.JSON(filtered)
 }
 
 func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c)
-	// validate vessel type early for client errors
 	validTypes := map[string]bool{"all": true, "inport": true, "arrivals": true, "departures": true, "forecast": true}
 	if !validTypes[opts.VesselType] {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": fmt.Sprintf("invalid type: %s", opts.VesselType)})
 	}
-	// parse and validate after/before filters
 	if opts.After != "" {
 		if _, err := time.Parse(time.RFC3339, opts.After); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid after parameter"})
@@ -102,40 +102,36 @@ func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid before parameter"})
 		}
 	}
-	// fetch and cache filtered vessels by type and location
-	vessels, err := h.vessel.GetFilteredVessels(opts.VesselType, opts.Location)
+	events, err := h.vessel.GetVessels(opts.VesselType)
 	if err != nil {
-		// circuit breaker open -> 503
 		if errors.Is(err, gobreaker.ErrOpenState) {
 			c.Set("Retry-After", strconv.Itoa(config.AppConfig.CircuitBreaker.CoolOffSeconds))
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service temporarily unavailable"})
 		}
-		// map invalid type errors to 400
 		if strings.HasPrefix(err.Error(), "invalid vesselType") {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		logger.Logger.Errorf("Error fetching vessel data: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve vessel data"})
 	}
-	// Apply JSON endpoint filters: name, nationality, after, before
-	vessels = utils.FilterVessels(vessels, c)
-	if opts.Unique {
-		vessels = utils.FilterUniqueVessels(vessels)
-	}
-	return c.JSON(vessels)
+	filtered := utils.FilterEvents(events, utils.FilterOptions{
+		Name:     opts.Name,
+		Category: opts.VesselType,
+		After:    opts.After,
+		Before:   opts.Before,
+		Unique:   opts.Unique,
+		Location: opts.Location,
+	})
+	return c.JSON(filtered)
 }
 
 // BridgeCalendarHandler returns iCalendar feed with only bridge lift events.
 func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
-	// Load Europe/London timezone once
-	loc, errLoc := time.LoadLocation("Europe/London")
+	_, errLoc := time.LoadLocation("Europe/London")
 	if errLoc != nil {
 		logger.Logger.Errorf("Error loading timezone Europe/London: %v", errLoc)
-		loc = time.UTC
 	}
-	// Get calendar options (e.g., unique, name filters)
 	opts := ParseQueryOptions(c)
-	// parse date-range filters
 	fromStr := c.Query("from", "")
 	toStr := c.Query("to", "")
 	var fromTime, toTime, toEnd time.Time
@@ -158,11 +154,9 @@ func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetProductId("-//ThamesTracker//EN")
 	cal.SetRefreshInterval("PT1H")
-	// Add London timezone to calendar
 	cal.SetXWRTimezone("Europe/London")
 	cal.AddVTimezone(ics.NewTimezone("Europe/London"))
-	// fetch bridge lifts
-	lifts, err := h.bridge.GetBridgeLifts()
+	events, err := h.bridge.GetBridgeLifts()
 	if err != nil {
 		if errors.Is(err, gobreaker.ErrOpenState) {
 			c.Set("Retry-After", strconv.Itoa(config.AppConfig.CircuitBreaker.CoolOffSeconds))
@@ -170,23 +164,22 @@ func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 		}
 		logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
 	} else {
-		if opts.Unique {
-			lifts = utils.FilterUniqueLifts(lifts, 4)
-		}
-		lifts = utils.FilterBridgeLiftsByName(lifts, opts.Name)
-		for _, lift := range lifts {
-			start, err := time.ParseInLocation("2006-01-02 15:04", lift.Date+" "+lift.Time, loc)
-			if err != nil {
-				logger.Logger.Errorf("Error parsing bridge lift time for vessel %s: %v", lift.Vessel, err)
+		filtered := utils.FilterEvents(events, utils.FilterOptions{
+			Name:     opts.Name,
+			Category: "bridge",
+			After:    opts.After,
+			Before:   opts.Before,
+			Unique:   opts.Unique,
+			Location: opts.Location,
+		})
+		for _, e := range filtered {
+			if fromStr != "" && e.Timestamp.Before(fromTime) {
 				continue
 			}
-			if fromStr != "" && start.Before(fromTime) {
+			if toStr != "" && e.Timestamp.After(toEnd) {
 				continue
 			}
-			if toStr != "" && start.After(toEnd) {
-				continue
-			}
-			calendar.BuildBridgeEvent(cal, lift, start)
+			calendar.BuildEvent(cal, e)
 		}
 	}
 	c.Set("Content-Type", "text/calendar")
@@ -195,15 +188,11 @@ func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 
 // VesselsCalendarHandler returns iCalendar feed with only vessel events.
 func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
-	// Load Europe/London timezone once
-	loc, errLoc := time.LoadLocation("Europe/London")
+	_, errLoc := time.LoadLocation("Europe/London")
 	if errLoc != nil {
 		logger.Logger.Errorf("Error loading timezone Europe/London: %v", errLoc)
-		loc = time.UTC
 	}
-	// Get calendar options (e.g., unique filter)
 	opts := ParseQueryOptions(c)
-	// parse date-range filters
 	fromStr := c.Query("from", "")
 	toStr := c.Query("to", "")
 	var fromTime, toTime, toEnd time.Time
@@ -226,12 +215,9 @@ func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetProductId("-//ThamesTracker//EN")
 	cal.SetRefreshInterval("PT1H")
-	// Add London timezone to calendar
 	cal.SetXWRTimezone("Europe/London")
 	cal.AddVTimezone(ics.NewTimezone("Europe/London"))
-	now := time.Now()
-
-	vessels, err := h.vessel.GetVessels(opts.VesselType)
+	events, err := h.vessel.GetVessels(opts.VesselType)
 	if err != nil {
 		if errors.Is(err, gobreaker.ErrOpenState) {
 			c.Set("Retry-After", strconv.Itoa(config.AppConfig.CircuitBreaker.CoolOffSeconds))
@@ -239,32 +225,22 @@ func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
 		}
 		logger.Logger.Errorf("Error fetching vessel data: %v", err)
 	} else {
-		vessels = utils.FilterVessels(vessels, c)
-		if opts.Unique {
-			vessels = utils.FilterUniqueVessels(vessels)
-		}
-		for _, vessel := range vessels {
-			var start, end time.Time
-			if vessel.Type == "inport" {
-				today := now
-				start = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
-				end = start.Add(24 * time.Hour)
-			} else {
-				orig, err := time.ParseInLocation("02/01/2006 15:04", vessel.Date+" "+vessel.Time, loc)
-				if err != nil {
-					logger.Logger.Errorf("Error parsing vessel time for %s: %v", vessel.Name, err)
-					continue
-				}
-				start = orig
-				end = orig.Add(15 * time.Minute)
-			}
-			if fromStr != "" && start.Before(fromTime) {
+		filtered := utils.FilterEvents(events, utils.FilterOptions{
+			Name:     opts.Name,
+			Category: opts.VesselType,
+			After:    opts.After,
+			Before:   opts.Before,
+			Unique:   opts.Unique,
+			Location: opts.Location,
+		})
+		for _, e := range filtered {
+			if fromStr != "" && e.Timestamp.Before(fromTime) {
 				continue
 			}
-			if toStr != "" && start.After(toEnd) {
+			if toStr != "" && e.Timestamp.After(toEnd) {
 				continue
 			}
-			calendar.BuildVesselEvent(cal, vessel, start, end)
+			calendar.BuildEvent(cal, e)
 		}
 	}
 	c.Set("Content-Type", "text/calendar")

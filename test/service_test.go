@@ -95,17 +95,18 @@ func TestService_GetBridgeLifts_CacheMiss(t *testing.T) {
 
 	// For bridge scraping, Colly uses its own HTTP client so we can pass the default client.
 	svc := service.NewService(httpclient.DefaultClient, fc)
-	lifts, err := svc.GetBridgeLifts()
+	events, err := svc.GetBridgeLifts()
 	assert.NoError(t, err)
-	assert.Len(t, lifts, 1)
-	assert.Equal(t, "2025-04-05", lifts[0].Date)
-	assert.Equal(t, "17:45", lifts[0].Time)
+	assert.Len(t, events, 1)
+	assert.Equal(t, "Paddle Steamer Dixie Queen", events[0].VesselName)
+	assert.Equal(t, "bridge", events[0].Category)
+	assert.Equal(t, "Up river", events[0].Direction)
 
 	// Verify that the cache now contains the value.
-	var cachedLifts []models.BridgeLift
-	err = fc.Get("bridge_lifts", &cachedLifts)
+	var cachedEvents []models.Event
+	err = fc.Get("bridge_lifts", &cachedEvents)
 	assert.NoError(t, err)
-	assert.Len(t, cachedLifts, 1)
+	assert.Len(t, cachedEvents, 1)
 }
 
 // TestService_GetVessels_CacheBehavior verifies that GetVessels fetches data on a cache miss
@@ -143,17 +144,18 @@ func TestService_GetVessels_CacheBehavior(t *testing.T) {
 	svc := service.NewService(fakeClient, fc)
 
 	// First call: cache miss, data should be fetched and then cached.
-	vessels1, err := svc.GetVessels("inport")
+	events1, err := svc.GetVessels("inport")
 	assert.NoError(t, err)
-	assert.Len(t, vessels1, 1)
-	assert.Equal(t, "SILVER STURGEON", vessels1[0].Name)
+	assert.Len(t, events1, 1)
+	assert.Equal(t, "SILVER STURGEON", events1[0].VesselName)
+	assert.Equal(t, "inport", events1[0].Category)
 
 	// Simulate a cache hit: clear fakeClient response to force error if called.
 	fakeClient.response = nil
-	vessels2, err := svc.GetVessels("inport")
+	events2, err := svc.GetVessels("inport")
 	assert.NoError(t, err)
-	assert.Len(t, vessels2, 1)
-	assert.Equal(t, "SILVER STURGEON", vessels2[0].Name)
+	assert.Len(t, events2, 1)
+	assert.Equal(t, "SILVER STURGEON", events2[0].VesselName)
 }
 
 // TestService_GetVessels_ErrorHandling simulates a network error.

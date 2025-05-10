@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Takenobou/thamestracker/internal/models"
 	"github.com/gocolly/colly"
@@ -36,40 +37,39 @@ const sampleBridgeHTML = `
 `
 
 func TestScrapeBridgeLifts(t *testing.T) {
-	// Create a mock HTTP server.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(sampleBridgeHTML))
 	}))
 	defer server.Close()
 
-	// Create a new Colly collector.
 	c := colly.NewCollector()
-	var lifts []models.BridgeLift
+	var events []models.Event
 
 	c.OnHTML("tbody tr", func(e *colly.HTMLElement) {
-		lift := models.BridgeLift{
-			Date:      e.ChildAttr("td:nth-child(2) time", "datetime"),
-			Time:      e.ChildAttr("td:nth-child(3) time", "datetime"),
-			Vessel:    e.ChildText("td:nth-child(4)"),
-			Direction: e.ChildText("td:nth-child(5)"),
+		timeStr := e.ChildAttr("td:nth-child(3) time", "datetime")
+		timestamp, _ := time.Parse(time.RFC3339, timeStr)
+		vessel := e.ChildText("td:nth-child(4)")
+		direction := e.ChildText("td:nth-child(5)")
+		event := models.Event{
+			Timestamp:  timestamp,
+			VesselName: vessel,
+			Category:   "bridge",
+			Direction:  direction,
+			Location:   "Tower Bridge Road, London",
 		}
-		if lift.Date != "" {
-			lift.Date = lift.Date[:10] // e.g., "2025-04-05"
-		}
-		if lift.Time != "" {
-			lift.Time = lift.Time[11:16] // e.g., "17:45" from "2025-04-05T17:45:00Z"
-		}
-		lifts = append(lifts, lift)
+		events = append(events, event)
 	})
 
 	err := c.Visit(server.URL)
 	assert.NoError(t, err)
 
-	assert.Len(t, lifts, 2, "expected 2 bridge lift events")
-	assert.Equal(t, "2025-04-05", lifts[0].Date)
-	assert.Equal(t, "17:45", lifts[0].Time)
-	assert.Equal(t, "Paddle Steamer Dixie Queen", lifts[0].Vessel)
-	assert.Equal(t, "Up river", lifts[0].Direction)
-	assert.Equal(t, "Down river", lifts[1].Direction)
+	assert.Len(t, events, 2, "expected 2 bridge lift events")
+	assert.Equal(t, "Paddle Steamer Dixie Queen", events[0].VesselName)
+	assert.Equal(t, "Up river", events[0].Direction)
+	assert.Equal(t, "Down river", events[1].Direction)
+	assert.Equal(t, "bridge", events[0].Category)
+	assert.Equal(t, "Tower Bridge Road, London", events[0].Location)
+	assert.Equal(t, 17, events[0].Timestamp.Hour())
+	assert.Equal(t, 45, events[0].Timestamp.Minute())
 }

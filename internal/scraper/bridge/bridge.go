@@ -13,8 +13,8 @@ import (
 	"github.com/gocolly/colly"
 )
 
-// ScrapeBridgeLifts fetches upcoming bridge lift times.
-func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
+// ScrapeBridgeLifts fetches upcoming bridge lift times as unified events.
+func ScrapeBridgeLifts() ([]models.Event, error) {
 	baseURL := config.AppConfig.URLs.TowerBridge
 	if baseURL == "" {
 		logger.Logger.Errorf("Tower Bridge URL is missing: set TOWER_BRIDGE environment variable")
@@ -23,11 +23,9 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 	logger.Logger.Infof("Fetching Tower Bridge lifts, url: %s", baseURL)
 
 	c := colly.NewCollector()
-	var lifts []models.BridgeLift
-	// track pagination detection
+	var events []models.Event
 	foundPager := false
 
-	// Scrape lift data.
 	c.OnHTML("tbody tr", func(e *colly.HTMLElement) {
 		rawTime := e.ChildAttr("td:nth-child(3) time", "datetime")
 		if rawTime == "" {
@@ -39,17 +37,18 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 			logger.Logger.Errorf("Error parsing datetime %s: %v", rawTime, err)
 			return
 		}
-		// rawTime already in London local time, skip conversion
-		lift := models.BridgeLift{
-			Date:      tParsed.Format("2006-01-02"),
-			Time:      tParsed.Format("15:04"),
-			Vessel:    strings.TrimSpace(e.ChildText("td:nth-child(4)")),
-			Direction: strings.TrimSpace(e.ChildText("td:nth-child(5)")),
+		vesselName := strings.TrimSpace(e.ChildText("td:nth-child(4)"))
+		direction := strings.TrimSpace(e.ChildText("td:nth-child(5)"))
+		event := models.Event{
+			Timestamp:  tParsed,
+			VesselName: vesselName,
+			Category:   "bridge",
+			Direction:  direction,
+			Location:   "Tower Bridge Road, London",
 		}
-
-		logger.Logger.Infof("Found lift: vessel: %s, date: %s, time: %s, direction: %s",
-			lift.Vessel, lift.Date, lift.Time, lift.Direction)
-		lifts = append(lifts, lift)
+		logger.Logger.Infof("Found lift event: vessel: %s, timestamp: %s, direction: %s",
+			vesselName, tParsed.Format(time.RFC3339), direction)
+		events = append(events, event)
 	})
 
 	// Handle pagination.
@@ -89,6 +88,9 @@ func ScrapeBridgeLifts() ([]models.BridgeLift, error) {
 	if !foundPager {
 		logger.Logger.Warnf("Bridge scraper: missing pagination link, structure may have changed")
 	}
-	logger.Logger.Infof("Retrieved bridge lifts from API, count: %d", len(lifts))
-	return lifts, nil
+	logger.Logger.Infof("Retrieved bridge lift events from API, count: %d", len(events))
+	return events, nil
 }
+
+// Deprecated: old ScrapeBridgeLifts returning []BridgeLift. Remove after migration.
+// func ScrapeBridgeLiftsOld() ([]models.BridgeLift, error) { ... }

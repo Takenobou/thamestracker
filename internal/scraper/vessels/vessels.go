@@ -34,8 +34,8 @@ type vesselData struct {
 	ETADate      string `json:"etad_dt,omitempty"`      // Used in forecast
 }
 
-// ScrapeVessels fetches vessel data based on the type (arrivals, departures, inport, forecast).
-func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
+// ScrapeVessels fetches vessel data as unified events based on the type (arrivals, departures, inport, forecast).
+func ScrapeVessels(vesselType string) ([]models.Event, error) {
 	apiURL := config.AppConfig.URLs.PortOfLondon
 	if apiURL == "" {
 		logger.Logger.Errorf("Port of London API URL is missing: set PORT_OF_LONDON environment variable")
@@ -43,7 +43,6 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 	}
 	logger.Logger.Infof("Fetching vessels from API, url: %s, vesselType: %s", apiURL, vesselType)
 
-	// Retry GET with exponential backoff
 	var resp *http.Response
 	err := utils.Retry(3, 500*time.Millisecond, func() error {
 		r, e := httpclient.DefaultClient.Get(apiURL)
@@ -71,20 +70,28 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 		logger.Logger.Errorf("Error decoding API response: %v", err)
 		return nil, err
 	}
-	// summary log for fetched vessels counts
 	logger.Logger.Infof("PLA vessels fetched: inport=%d arrivals=%d departures=%d forecast=%d url=%s",
 		len(result.InPort), len(result.Arrivals), len(result.Departures), len(result.Forecast), apiURL)
 
-	vessels := make([]models.Vessel, 0)
+	events := make([]models.Event, 0)
 
-	// Helper function to process vessel data from a given category.
+	parseTimestamp := func(raw string) time.Time {
+		const srcLayout = "2006-01-02 15:04:05.000"
+		london, _ := time.LoadLocation("Europe/London")
+		if raw != "" {
+			if t, err := time.ParseInLocation(srcLayout, raw, london); err == nil {
+				return t
+			}
+		}
+		return time.Now().In(london)
+	}
+
 	processVessels := func(vesselList []vesselData, category string) {
 		for _, item := range vesselList {
 			if item.VesselName == "" {
 				logger.Logger.Warnf("Missing vessel name in category %s, skipping", category)
 				continue
 			}
-			// skip missing voyage number, except for forecasts
 			if item.Visit == "" && category != "forecast" {
 				logger.Logger.Warnf("Missing voyage number for vessel %s, skipping", item.VesselName)
 				continue
@@ -99,29 +106,21 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 			default:
 				ts = item.LastRepDT
 			}
-			if ts == "" {
-				logger.Logger.Warnf("Missing timestamp for vessel %s, using now()", item.VesselName)
-				ts = time.Now().Format("2006-01-02 15:04:05.000")
+			tParsed := parseTimestamp(ts)
+
+			event := models.Event{
+				Timestamp:  tParsed,
+				VesselName: item.VesselName,
+				Category:   category,
+				VoyageNo:   item.Visit,
+				From:       item.LocationFrom,
+				To:         item.LocationTo,
+				Location:   item.LocationName,
 			}
-
-			// parse raw timestamp into date and time
-			dateStr, timeStr := utils.ParseRawTimestamp(ts)
-
-			vessels = append(vessels, models.Vessel{
-				Time:         timeStr,
-				Date:         dateStr,
-				LocationFrom: item.LocationFrom,
-				LocationTo:   item.LocationTo,
-				LocationName: item.LocationName,
-				Name:         item.VesselName,
-				Nationality:  item.Nationality,
-				VoyageNo:     item.Visit,
-				Type:         category,
-			})
+			events = append(events, event)
 		}
 	}
 
-	// Handle "all" by processing each category.
 	if vesselType == "all" {
 		processVessels(result.InPort, "inport")
 		processVessels(result.Arrivals, "arrivals")
@@ -144,6 +143,9 @@ func ScrapeVessels(vesselType string) ([]models.Vessel, error) {
 		processVessels(vesselList, vesselType)
 	}
 
-	logger.Logger.Infof("Retrieved vessels from API, count: %d, vesselType: %s", len(vessels), vesselType)
-	return vessels, nil
+	logger.Logger.Infof("Retrieved vessel events from API, count: %d, vesselType: %s", len(events), vesselType)
+	return events, nil
 }
+
+// Deprecated: old ScrapeVessels returning []Vessel. Remove after migration.
+// func ScrapeVesselsOld(vesselType string) ([]models.Vessel, error) { ... }
