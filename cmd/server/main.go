@@ -13,6 +13,8 @@ import (
 	"github.com/Takenobou/thamestracker/internal/helpers/cache"
 	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
+	bridgeScraper "github.com/Takenobou/thamestracker/internal/scraper/bridge"
+	vesselScraper "github.com/Takenobou/thamestracker/internal/scraper/vessels"
 	"github.com/Takenobou/thamestracker/internal/service"
 	"github.com/Takenobou/thamestracker/internal/storage"
 	"github.com/gofiber/fiber/v2"
@@ -32,7 +34,12 @@ func main() {
 	breakerClient := httpclient.NewBreakerClient(httpclient.DefaultClient,
 		config.AppConfig.CircuitBreaker.MaxFailures,
 		config.AppConfig.CircuitBreaker.CoolOffSeconds)
-	svc := service.NewService(breakerClient, cacheClient)
+	svc := service.NewService(
+		breakerClient,
+		cacheClient,
+		bridgeScraper.BridgeScraperImpl{},
+		vesselScraper.VesselScraperImpl{},
+	)
 	handler := api.NewAPIHandler(svc)
 
 	app := fiber.New()

@@ -13,6 +13,9 @@ import (
 
 	"github.com/Takenobou/thamestracker/internal/service"
 	"github.com/joho/godotenv"
+
+	bridgeScraper "github.com/Takenobou/thamestracker/internal/scraper/bridge"
+	vesselScraper "github.com/Takenobou/thamestracker/internal/scraper/vessels"
 )
 
 func main() {
@@ -22,7 +25,12 @@ func main() {
 
 	// initialize service layer
 	cacheClient := cache.NewRedisCache(config.AppConfig.Redis.Address)
-	svc := service.NewService(httpclient.DefaultClient, cacheClient)
+	svc := service.NewService(
+		httpclient.DefaultClient,
+		cacheClient,
+		bridgeScraper.BridgeScraperImpl{},
+		vesselScraper.VesselScraperImpl{},
+	)
 
 	if len(os.Args) < 2 {
 		logger.Logger.Errorf("Usage error. Usage: %s [bridge-lifts | vessels | arrivals | departures | forecast | ics | bridge-ics | vessels-ics]", os.Args[0])

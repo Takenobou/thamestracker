@@ -1,14 +1,19 @@
-package test
+package cache
 
 import (
+	"os"
 	"testing"
 	"time"
 
+	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/Takenobou/thamestracker/internal/helpers/cache"
 )
+
+func TestMain(m *testing.M) {
+	logger.InitLogger()
+	os.Exit(m.Run())
+}
 
 func TestRedisCache_SetGet(t *testing.T) {
 	// use in‐memory Redis
@@ -16,7 +21,7 @@ func TestRedisCache_SetGet(t *testing.T) {
 	assert.NoError(t, err)
 	defer srv.Close()
 
-	c := cache.NewRedisCache(srv.Addr())
+	c := NewRedisCache(srv.Addr())
 	key := "test_key"
 	value := map[string]string{"foo": "bar"}
 	ttl := 5 * time.Second

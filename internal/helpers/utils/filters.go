@@ -75,7 +75,7 @@ func FilterEvents(events []models.Event, opts FilterOptions) []models.Event {
 	}
 	if opts.Unique {
 		if category == "bridge" {
-			filtered = filterHybridUniqueBridgeEvents(filtered, 0.10, 10)
+			filtered = filterHybridUniqueBridgeEvents(filtered, 0.10, 8)
 		} else {
 			filtered = filterUniqueEvents(filtered)
 		}

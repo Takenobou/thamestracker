@@ -16,21 +16,36 @@ import (
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/helpers/metrics"
 	"github.com/Takenobou/thamestracker/internal/models"
-	bridgeScraper "github.com/Takenobou/thamestracker/internal/scraper/bridge"
-	vesselScraper "github.com/Takenobou/thamestracker/internal/scraper/vessels"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 )
 
-type Service struct {
-	HTTPClient httpclient.Client
-	Cache      cache.Cache
+// Define BridgeScraper and VesselScraper interfaces
+
+type BridgeScraper interface {
+	ScrapeBridgeLifts() ([]models.Event, error)
 }
 
-func NewService(httpClient httpclient.Client, cache cache.Cache) *Service {
+type VesselScraper interface {
+	ScrapeVessels(vesselType string) ([]models.Event, error)
+}
+
+// Update Service struct to use the interfaces
+
+type Service struct {
+	HTTPClient    httpclient.Client
+	Cache         cache.Cache
+	BridgeScraper BridgeScraper
+	VesselScraper VesselScraper
+}
+
+// Update NewService to accept the new dependencies
+func NewService(httpClient httpclient.Client, cache cache.Cache, bridgeScraper BridgeScraper, vesselScraper VesselScraper) *Service {
 	return &Service{
-		HTTPClient: httpClient,
-		Cache:      cache,
+		HTTPClient:    httpClient,
+		Cache:         cache,
+		BridgeScraper: bridgeScraper,
+		VesselScraper: vesselScraper,
 	}
 }
 
@@ -53,7 +68,7 @@ func (s *Service) GetBridgeLifts() ([]models.Event, error) {
 		metrics.CacheMisses.Inc()
 		timer := prometheus.NewTimer(metrics.ScrapeDuration.WithLabelValues("bridge"))
 		metrics.ScrapeCounter.WithLabelValues("bridge").Inc()
-		l, err2 := bridgeScraper.ScrapeBridgeLifts()
+		l, err2 := s.BridgeScraper.ScrapeBridgeLifts()
 		timer.ObserveDuration()
 		if err2 != nil {
 			return nil, err2
@@ -85,7 +100,7 @@ func (s *Service) GetVessels(vesselType string) ([]models.Event, error) {
 		metrics.CacheMisses.Inc()
 		timer := prometheus.NewTimer(metrics.ScrapeDuration.WithLabelValues("vessels"))
 		metrics.ScrapeCounter.WithLabelValues("vessels").Inc()
-		data, err2 := vesselScraper.ScrapeVessels(vesselType)
+		data, err2 := s.VesselScraper.ScrapeVessels(vesselType)
 		timer.ObserveDuration()
 		if err2 != nil {
 			return nil, err2

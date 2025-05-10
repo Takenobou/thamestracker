@@ -93,3 +93,11 @@ func ScrapeBridgeLifts() ([]models.Event, error) {
 	logger.Logger.Infof("Retrieved bridge lift events from API, count: %d", len(events))
 	return events, nil
 }
+
+// BridgeScraperImpl is a concrete implementation of service.BridgeScraper
+// that calls ScrapeBridgeLifts.
+type BridgeScraperImpl struct{}
+
+func (BridgeScraperImpl) ScrapeBridgeLifts() ([]models.Event, error) {
+	return ScrapeBridgeLifts()
+}

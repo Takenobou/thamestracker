@@ -146,3 +146,10 @@ func ScrapeVessels(vesselType string) ([]models.Event, error) {
 	logger.Logger.Infof("Retrieved vessel events from API, count: %d, vesselType: %s", len(events), vesselType)
 	return events, nil
 }
+
+// VesselScraperImpl implements service.VesselScraper
+type VesselScraperImpl struct{}
+
+func (VesselScraperImpl) ScrapeVessels(vesselType string) ([]models.Event, error) {
+	return ScrapeVessels(vesselType)
+}

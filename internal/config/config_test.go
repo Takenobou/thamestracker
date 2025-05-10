@@ -1,10 +1,9 @@
-package test
+package config
 
 import (
 	"os"
 	"testing"
 
-	"github.com/Takenobou/thamestracker/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,7 +19,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Instantiate config
-	cfg := config.NewConfig()
+	cfg := NewConfig()
 	assert.Equal(t, 9090, cfg.Server.Port)
 	assert.Equal(t, "http://fake.london", cfg.URLs.PortOfLondon)
 	assert.Equal(t, "http://fake.bridge", cfg.URLs.TowerBridge)
