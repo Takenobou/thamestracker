@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -74,7 +75,7 @@ func FilterEvents(events []models.Event, opts FilterOptions) []models.Event {
 	}
 	if opts.Unique {
 		if category == "bridge" {
-			filtered = filterUniqueBridgeEvents(filtered, 4)
+			filtered = filterHybridUniqueBridgeEvents(filtered, 0.10, 10)
 		} else {
 			filtered = filterUniqueEvents(filtered)
 		}
@@ -96,18 +97,35 @@ func filterUniqueEvents(events []models.Event) []models.Event {
 	return result
 }
 
-// filterUniqueBridgeEvents filters bridge events for vessels that appear threshold times or less.
-func filterUniqueBridgeEvents(events []models.Event, threshold int) []models.Event {
+// filterHybridUniqueBridgeEvents filters bridge events by excluding vessels in the top percentile most frequent or that appear more than a specified maximum count.
+func filterHybridUniqueBridgeEvents(events []models.Event, percentile float64, maxCount int) []models.Event {
 	counts := make(map[string]int)
 	for _, e := range events {
 		if strings.ToLower(e.Category) == "bridge" {
 			counts[e.VesselName]++
 		}
 	}
+	type vesselCount struct {
+		Name  string
+		Count int
+	}
+	var vessels []vesselCount
+	for name, count := range counts {
+		vessels = append(vessels, vesselCount{name, count})
+	}
+	sort.Slice(vessels, func(i, j int) bool { return vessels[i].Count > vessels[j].Count })
+	cutoff := int(float64(len(vessels)) * percentile)
+	if cutoff < 1 {
+		cutoff = 1
+	}
+	topVessels := make(map[string]bool)
+	for i := 0; i < cutoff && i < len(vessels); i++ {
+		topVessels[vessels[i].Name] = true
+	}
 	var result []models.Event
 	for _, e := range events {
 		if strings.ToLower(e.Category) == "bridge" {
-			if counts[e.VesselName] <= threshold {
+			if !topVessels[e.VesselName] && counts[e.VesselName] <= maxCount {
 				result = append(result, e)
 			}
 		} else {
