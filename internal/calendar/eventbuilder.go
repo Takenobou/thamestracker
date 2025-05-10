@@ -50,9 +50,16 @@ func BuildEvent(cal *ics.Calendar, e models.Event) {
 	case "inport":
 		event.SetAllDayStartAt(start)
 		event.SetAllDayEndAt(start.Add(24 * time.Hour))
-		summary = fmt.Sprintf("Vessel - %s", e.VesselName)
+		summary = fmt.Sprintf("Vessel – %s", e.VesselName)
 		location = e.Location
-		description = fmt.Sprintf("Location: %s\nVoyage: %s → %s\nVoyage No: %s", e.Location, e.From, e.To, e.VoyageNo)
+		desc := fmt.Sprintf("Location: %s", e.Location)
+		if e.From != "" || e.To != "" {
+			desc += fmt.Sprintf("\nVoyage: %s → %s", e.From, e.To)
+		}
+		if e.VoyageNo != "" {
+			desc += fmt.Sprintf("\nVoyage No: %s", e.VoyageNo)
+		}
+		description = desc
 		event.SetProperty("CATEGORIES", "INPORT")
 		goto set_common
 	default:

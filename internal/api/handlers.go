@@ -64,7 +64,7 @@ func NewAPIHandler(svc ServiceInterface) *APIHandler {
 }
 
 func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
-	opts := ParseQueryOptions(c)
+	opts := ParseQueryOptions(c, "bridge")
 	events, err := h.bridge.GetBridgeLifts()
 	if err != nil {
 		if errors.Is(err, gobreaker.ErrOpenState) {
@@ -74,10 +74,9 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 		logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve bridge lift data"})
 	}
-	// Filter events for bridge category
 	filtered := utils.FilterEvents(events, utils.FilterOptions{
 		Name:     opts.Name,
-		Category: "bridge",
+		Category: opts.Category,
 		After:    opts.After,
 		Before:   opts.Before,
 		Unique:   opts.Unique,
@@ -87,10 +86,10 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 }
 
 func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
-	opts := ParseQueryOptions(c)
+	opts := ParseQueryOptions(c, "all")
 	validTypes := map[string]bool{"all": true, "inport": true, "arrivals": true, "departures": true, "forecast": true}
-	if !validTypes[opts.VesselType] {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": fmt.Sprintf("invalid type: %s", opts.VesselType)})
+	if !validTypes[opts.Category] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": fmt.Sprintf("invalid type: %s", opts.Category)})
 	}
 	if opts.After != "" {
 		if _, err := time.Parse(time.RFC3339, opts.After); err != nil {
@@ -102,7 +101,7 @@ func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid before parameter"})
 		}
 	}
-	events, err := h.vessel.GetVessels(opts.VesselType)
+	events, err := h.vessel.GetVessels(opts.Category)
 	if err != nil {
 		if errors.Is(err, gobreaker.ErrOpenState) {
 			c.Set("Retry-After", strconv.Itoa(config.AppConfig.CircuitBreaker.CoolOffSeconds))
@@ -116,7 +115,7 @@ func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 	}
 	filtered := utils.FilterEvents(events, utils.FilterOptions{
 		Name:     opts.Name,
-		Category: opts.VesselType,
+		Category: opts.Category,
 		After:    opts.After,
 		Before:   opts.Before,
 		Unique:   opts.Unique,
@@ -127,35 +126,7 @@ func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 
 // BridgeCalendarHandler returns iCalendar feed with only bridge lift events.
 func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
-	_, errLoc := time.LoadLocation("Europe/London")
-	if errLoc != nil {
-		logger.Logger.Errorf("Error loading timezone Europe/London: %v", errLoc)
-	}
-	opts := ParseQueryOptions(c)
-	fromStr := c.Query("from", "")
-	toStr := c.Query("to", "")
-	var fromTime, toTime, toEnd time.Time
-	if fromStr != "" {
-		ft, err := time.Parse("2006-01-02", fromStr)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid from parameter"})
-		}
-		fromTime = ft
-	}
-	if toStr != "" {
-		tt, err := time.Parse("2006-01-02", toStr)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid to parameter"})
-		}
-		toTime = tt
-		toEnd = toTime.Add(24 * time.Hour)
-	}
-	cal := ics.NewCalendar()
-	cal.SetMethod(ics.MethodPublish)
-	cal.SetProductId("-//ThamesTracker//EN")
-	cal.SetRefreshInterval("PT1H")
-	cal.SetXWRTimezone("Europe/London")
-	cal.AddVTimezone(ics.NewTimezone("Europe/London"))
+	opts := ParseQueryOptions(c, "bridge")
 	events, err := h.bridge.GetBridgeLifts()
 	if err != nil {
 		if errors.Is(err, gobreaker.ErrOpenState) {
@@ -163,24 +134,23 @@ func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service temporarily unavailable"})
 		}
 		logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
-	} else {
-		filtered := utils.FilterEvents(events, utils.FilterOptions{
-			Name:     opts.Name,
-			Category: "bridge",
-			After:    opts.After,
-			Before:   opts.Before,
-			Unique:   opts.Unique,
-			Location: opts.Location,
-		})
-		for _, e := range filtered {
-			if fromStr != "" && e.Timestamp.Before(fromTime) {
-				continue
-			}
-			if toStr != "" && e.Timestamp.After(toEnd) {
-				continue
-			}
-			calendar.BuildEvent(cal, e)
-		}
+	}
+	filtered := utils.FilterEvents(events, utils.FilterOptions{
+		Name:     opts.Name,
+		Category: opts.Category,
+		After:    opts.After,
+		Before:   opts.Before,
+		Unique:   opts.Unique,
+		Location: opts.Location,
+	})
+	cal := ics.NewCalendar()
+	cal.SetMethod(ics.MethodPublish)
+	cal.SetProductId("-//ThamesTracker//EN")
+	cal.SetRefreshInterval("PT1H")
+	cal.SetXWRTimezone("Europe/London")
+	cal.AddVTimezone(ics.NewTimezone("Europe/London"))
+	for _, e := range filtered {
+		calendar.BuildEvent(cal, e)
 	}
 	c.Set("Content-Type", "text/calendar")
 	return c.SendString(cal.Serialize())
@@ -188,60 +158,31 @@ func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 
 // VesselsCalendarHandler returns iCalendar feed with only vessel events.
 func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
-	_, errLoc := time.LoadLocation("Europe/London")
-	if errLoc != nil {
-		logger.Logger.Errorf("Error loading timezone Europe/London: %v", errLoc)
-	}
-	opts := ParseQueryOptions(c)
-	fromStr := c.Query("from", "")
-	toStr := c.Query("to", "")
-	var fromTime, toTime, toEnd time.Time
-	if fromStr != "" {
-		ft, err := time.Parse("2006-01-02", fromStr)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid from parameter"})
-		}
-		fromTime = ft
-	}
-	if toStr != "" {
-		tt, err := time.Parse("2006-01-02", toStr)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid to parameter"})
-		}
-		toTime = tt
-		toEnd = toTime.Add(24 * time.Hour)
-	}
-	cal := ics.NewCalendar()
-	cal.SetMethod(ics.MethodPublish)
-	cal.SetProductId("-//ThamesTracker//EN")
-	cal.SetRefreshInterval("PT1H")
-	cal.SetXWRTimezone("Europe/London")
-	cal.AddVTimezone(ics.NewTimezone("Europe/London"))
-	events, err := h.vessel.GetVessels(opts.VesselType)
+	opts := ParseQueryOptions(c, "all")
+	events, err := h.vessel.GetVessels(opts.Category)
 	if err != nil {
 		if errors.Is(err, gobreaker.ErrOpenState) {
 			c.Set("Retry-After", strconv.Itoa(config.AppConfig.CircuitBreaker.CoolOffSeconds))
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service temporarily unavailable"})
 		}
 		logger.Logger.Errorf("Error fetching vessel data: %v", err)
-	} else {
-		filtered := utils.FilterEvents(events, utils.FilterOptions{
-			Name:     opts.Name,
-			Category: opts.VesselType,
-			After:    opts.After,
-			Before:   opts.Before,
-			Unique:   opts.Unique,
-			Location: opts.Location,
-		})
-		for _, e := range filtered {
-			if fromStr != "" && e.Timestamp.Before(fromTime) {
-				continue
-			}
-			if toStr != "" && e.Timestamp.After(toEnd) {
-				continue
-			}
-			calendar.BuildEvent(cal, e)
-		}
+	}
+	filtered := utils.FilterEvents(events, utils.FilterOptions{
+		Name:     opts.Name,
+		Category: opts.Category,
+		After:    opts.After,
+		Before:   opts.Before,
+		Unique:   opts.Unique,
+		Location: opts.Location,
+	})
+	cal := ics.NewCalendar()
+	cal.SetMethod(ics.MethodPublish)
+	cal.SetProductId("-//ThamesTracker//EN")
+	cal.SetRefreshInterval("PT1H")
+	cal.SetXWRTimezone("Europe/London")
+	cal.AddVTimezone(ics.NewTimezone("Europe/London"))
+	for _, e := range filtered {
+		calendar.BuildEvent(cal, e)
 	}
 	c.Set("Content-Type", "text/calendar")
 	return c.SendString(cal.Serialize())
