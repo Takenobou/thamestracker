@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Takenobou/thamestracker/internal/helpers/metrics"
 	"github.com/Takenobou/thamestracker/internal/models"
 )
 
@@ -103,6 +104,8 @@ func filterUniqueEvents(events []models.Event) []models.Event {
 		if !seen[key] {
 			seen[key] = true
 			result = append(result, e)
+		} else {
+			metrics.FilteredEventsTotal.WithLabelValues(strings.ToLower(e.Category)).Inc()
 		}
 	}
 	return result
@@ -138,6 +141,8 @@ func filterHybridUniqueBridgeEvents(events []models.Event, percentile float64, m
 		if strings.ToLower(e.Category) == "bridge" {
 			if !topVessels[e.VesselName] && counts[e.VesselName] <= maxCount {
 				result = append(result, e)
+			} else {
+				metrics.FilteredEventsTotal.WithLabelValues("bridge").Inc()
 			}
 		} else {
 			result = append(result, e)
