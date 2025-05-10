@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
 	"os"
 
 	"github.com/Takenobou/thamestracker/internal/config"
@@ -169,4 +170,31 @@ func TestScrapeBridgeLifts_VisitError(t *testing.T) {
 	c := colly.NewCollector()
 	err := c.Visit(":bad-url:")
 	assert.Error(t, err, "should error on bad url")
+}
+
+func BenchmarkScrapeBridgeLifts(b *testing.B) {
+	// Generate a large HTML table with 500 rows
+	var html = `<html><body><table><tbody>`
+	for i := 0; i < 500; i++ {
+		html += `<tr><td>Sat</td><td><time datetime="2025-04-05T00:00:00Z">05 Apr 2025</time></td><td><time datetime="2025-04-05T17:45:00Z">17:45</time></td><td>Vessel` + fmt.Sprint(i) + `</td><td>Up river</td></tr>`
+	}
+	html += `</tbody></table></body></html>`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(html))
+	}))
+	defer server.Close()
+
+	oldURL := config.AppConfig.URLs.TowerBridge
+	config.AppConfig.URLs.TowerBridge = server.URL
+	defer func() { config.AppConfig.URLs.TowerBridge = oldURL }()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ScrapeBridgeLifts()
+		if err != nil {
+			b.Fatalf("unexpected error: %v", err)
+		}
+	}
 }

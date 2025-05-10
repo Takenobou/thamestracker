@@ -76,14 +76,12 @@ func ScrapeVessels(vesselType string) ([]models.Event, error) {
 	events := make([]models.Event, 0)
 
 	parseTimestamp := func(raw string) time.Time {
-		const srcLayout = "2006-01-02 15:04:05.000"
-		london, _ := time.LoadLocation("Europe/London")
 		if raw != "" {
-			if t, err := time.ParseInLocation(srcLayout, raw, london); err == nil {
+			if t, err := time.ParseInLocation(utils.SrcLayout, raw, utils.LondonLocation); err == nil {
 				return t
 			}
 		}
-		return time.Now().In(london)
+		return time.Now().In(utils.LondonLocation)
 	}
 
 	processVessels := func(vesselList []vesselData, category string) {

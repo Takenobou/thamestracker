@@ -57,18 +57,20 @@ services:
 ## Configuration
 All settings via environment variables. Defaults shown:
 
-| Variable           | Default                                                         | Description                                    |
-|--------------------|-----------------------------------------------------------------|------------------------------------------------|
-| `PORT`             | `8080`                                                          | HTTP port for server                           |
-| `PORT_OF_LONDON`   | `https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists`   | Base URL for Port of London ship API           |
-| `TOWER_BRIDGE`     | `https://www.towerbridge.org.uk/lift-times`                     | URL for Tower Bridge lift times page           |
-| `REDIS_ADDRESS`    | `localhost:6379`                                                | Redis connection address                       |
-| `CB_MAX_FAILURES`  | `5`                                                             | Circuit-breaker max consecutive failures       |
-| `CB_COOL_OFF`      | `60`                                                            | Circuit-breaker open timeout (sec)             |
-| `CACHE_MAX_ENTRIES`| `1000`                                                          | Max entries in in-memory fallback cache        |
-| `CACHE_TTL_SECONDS`| `3600`                                                          | TTL for in-memory fallback cache (sec)         |
-| `REQUESTS_PER_MIN` | `60`                                                            | Per-IP rate-limit (requests per minute)        |
-| `METRICS_PUBLIC`   | `false`                                                         | Expose /metrics endpoint if true               |
+| Variable                   | Default                                                         | Description                                    |
+|----------------------------|-----------------------------------------------------------------|------------------------------------------------|
+| `PORT`                     | `8080`                                                          | HTTP port for server                           |
+| `PORT_OF_LONDON`           | `https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists`   | Base URL for Port of London ship API           |
+| `TOWER_BRIDGE`             | `https://www.towerbridge.org.uk/lift-times`                     | URL for Tower Bridge lift times page           |
+| `REDIS_ADDRESS`            | `localhost:6379`                                                | Redis connection address                       |
+| `CB_MAX_FAILURES`          | `5`                                                             | Circuit-breaker max consecutive failures       |
+| `CB_COOL_OFF`              | `60`                                                            | Circuit-breaker open timeout (sec)             |
+| `CACHE_MAX_ENTRIES`        | `1000`                                                          | Max entries in in-memory fallback cache        |
+| `CACHE_TTL_SECONDS`        | `3600`                                                          | TTL for in-memory fallback cache (sec)         |
+| `REQUESTS_PER_MIN`         | `60`                                                            | Per-IP rate-limit (requests per minute)        |
+| `METRICS_PUBLIC`           | `false`                                                         | Expose /metrics endpoint if true               |
+| `BRIDGE_FILTER_PERCENTILE` | `0.10`                                                          | Percentile threshold for filtering most frequent bridge lifts when unique=true |
+| `BRIDGE_FILTER_MAX_COUNT`  | `8`                                                             | Max times a vessel can appear in bridge lifts when unique=true |
 
 ## API Reference
 
@@ -241,6 +243,9 @@ thamestracker forecast
 thamestracker bridge-ics > bridge.ics
 thamestracker vessels-ics > vessels.ics
 ```
+
+## Bridge filter tuning
+When using `unique=true` on bridge lift endpoints, the service will filter out vessels that are in the top `BRIDGE_FILTER_PERCENTILE` most frequent lifts, or that appear more than `BRIDGE_FILTER_MAX_COUNT` times. These thresholds can be tuned at runtime via environment variables, no code changes required.
 
 ## License
 MIT

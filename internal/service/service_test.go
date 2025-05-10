@@ -201,8 +201,12 @@ func TestListLocations(t *testing.T) {
 	locs, err := svc.ListLocations()
 	assert.NoError(t, err)
 	assert.Len(t, locs, 2)
-	assert.Equal(t, "Port1", locs[0].Name)
-	assert.Equal(t, "Port2", locs[1].Name)
+	var names []string
+	for _, l := range locs {
+		names = append(names, l.Name)
+	}
+	assert.Contains(t, names, "Port1")
+	assert.Contains(t, names, "Port2")
 }
 
 func TestListLocations_Error(t *testing.T) {

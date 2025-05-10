@@ -1,6 +1,7 @@
 package vessels_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -150,4 +151,31 @@ func TestScrapeVessels_TimestampFallback(t *testing.T) {
 	// Should fallback to now, so timestamp is close to now
 	delta := time.Since(events[0].Timestamp)
 	assert.Less(t, delta.Seconds(), 5.0)
+}
+
+func BenchmarkScrapeVessels(b *testing.B) {
+	// Generate a large mock response with 500 vessel entries
+	var vesselsJSON = `{"inport": [`
+	for i := 0; i < 500; i++ {
+		vesselsJSON += `{"location_name":"WOODS QUAY","vessel_name":"VESSEL` + fmt.Sprint(i) + `","visit":"S` + fmt.Sprint(i) + `","last_rep_dt":"2025-01-25 20:33:47.150"}`
+		if i < 499 {
+			vesselsJSON += ","
+		}
+	}
+	vesselsJSON += `],"arrivals":[],"departures":[],"forecast":[]}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(vesselsJSON))
+	}))
+	defer server.Close()
+	config.AppConfig.URLs.PortOfLondon = server.URL
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := vessels.ScrapeVessels("inport")
+		if err != nil {
+			b.Fatalf("unexpected error: %v", err)
+		}
+	}
 }

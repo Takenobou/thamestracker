@@ -32,9 +32,8 @@ func ScrapeBridgeLifts() ([]models.Event, error) {
 			logger.Logger.Warnf("Missing datetime for vessel row, skipping")
 			return
 		}
-		london, _ := time.LoadLocation("Europe/London")
 		ts := strings.TrimSuffix(rawTime, "Z")
-		tParsed, err := time.ParseInLocation("2006-01-02T15:04:05", ts, london)
+		tParsed, err := time.ParseInLocation("2006-01-02T15:04:05", ts, utils.LondonLocation)
 		if err != nil {
 			logger.Logger.Errorf("Error parsing datetime %s: %v", rawTime, err)
 			return

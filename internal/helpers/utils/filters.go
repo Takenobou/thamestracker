@@ -16,6 +16,9 @@ type FilterOptions struct {
 	Before   string
 	Unique   bool
 	Location string
+	// Bridge filter params
+	BridgeFilterPercentile float64 // optional, only for bridge
+	BridgeFilterMaxCount   int     // optional, only for bridge
 }
 
 // FilterEvents applies generic filters to a slice of Event.
@@ -75,7 +78,15 @@ func FilterEvents(events []models.Event, opts FilterOptions) []models.Event {
 	}
 	if opts.Unique {
 		if category == "bridge" {
-			filtered = filterHybridUniqueBridgeEvents(filtered, 0.10, 8)
+			percentile := opts.BridgeFilterPercentile
+			if percentile == 0 {
+				percentile = 0.10
+			}
+			maxCount := opts.BridgeFilterMaxCount
+			if maxCount == 0 {
+				maxCount = 8
+			}
+			filtered = filterHybridUniqueBridgeEvents(filtered, percentile, maxCount)
 		} else {
 			filtered = filterUniqueEvents(filtered)
 		}

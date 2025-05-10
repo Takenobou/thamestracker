@@ -75,12 +75,14 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to retrieve bridge lift data"})
 	}
 	filtered := utils.FilterEvents(events, utils.FilterOptions{
-		Name:     opts.Name,
-		Category: opts.Category,
-		After:    opts.After,
-		Before:   opts.Before,
-		Unique:   opts.Unique,
-		Location: opts.Location,
+		Name:                   opts.Name,
+		Category:               opts.Category,
+		After:                  opts.After,
+		Before:                 opts.Before,
+		Unique:                 opts.Unique,
+		Location:               opts.Location,
+		BridgeFilterPercentile: config.AppConfig.BridgeFilterPercentile,
+		BridgeFilterMaxCount:   config.AppConfig.BridgeFilterMaxCount,
 	})
 	return c.JSON(filtered)
 }
@@ -134,14 +136,17 @@ func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service temporarily unavailable"})
 		}
 		logger.Logger.Errorf("Error fetching bridge lifts: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve bridge lift data"})
 	}
 	filtered := utils.FilterEvents(events, utils.FilterOptions{
-		Name:     opts.Name,
-		Category: opts.Category,
-		After:    opts.After,
-		Before:   opts.Before,
-		Unique:   opts.Unique,
-		Location: opts.Location,
+		Name:                   opts.Name,
+		Category:               opts.Category,
+		After:                  opts.After,
+		Before:                 opts.Before,
+		Unique:                 opts.Unique,
+		Location:               opts.Location,
+		BridgeFilterPercentile: config.AppConfig.BridgeFilterPercentile,
+		BridgeFilterMaxCount:   config.AppConfig.BridgeFilterMaxCount,
 	})
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
@@ -166,6 +171,7 @@ func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Service temporarily unavailable"})
 		}
 		logger.Logger.Errorf("Error fetching vessel data: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve vessel data"})
 	}
 	filtered := utils.FilterEvents(events, utils.FilterOptions{
 		Name:     opts.Name,

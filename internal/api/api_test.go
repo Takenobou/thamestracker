@@ -2,11 +2,18 @@ package api
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
+	importedLogger "github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/models"
 	"github.com/Takenobou/thamestracker/internal/service"
+	"github.com/gofiber/fiber/v2"
+	"github.com/sony/gobreaker"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -50,8 +57,93 @@ func (f fakeService) GetFilteredVessels(vesselType, location string) ([]models.E
 	return f.GetVessels(vesselType)
 }
 
+// Error fakes for testing
+
+type errorService struct {
+	bridgeErr error
+	vesselErr error
+}
+
+func (e errorService) GetBridgeLifts() ([]models.Event, error)   { return nil, e.bridgeErr }
+func (e errorService) GetVessels(string) ([]models.Event, error) { return nil, e.vesselErr }
+func (e errorService) GetFilteredVessels(string, string) ([]models.Event, error) {
+	return nil, e.vesselErr
+}
+func (e errorService) HealthCheck(ctx context.Context) error           { return nil }
+func (e errorService) ListLocations() ([]service.LocationStats, error) { return nil, nil }
+
+func setupTestApp(svc ServiceInterface) *fiber.App {
+	h := NewAPIHandler(svc)
+	app := fiber.New()
+	app.Get("/bridge-lifts", h.GetBridgeLifts)
+	app.Get("/vessels", h.GetVessels)
+	app.Get("/bridge-lifts/calendar.ics", h.BridgeCalendarHandler)
+	app.Get("/vessels/calendar.ics", h.VesselsCalendarHandler)
+	return app
+}
+
+func TestBridgeLifts_ErrorPropagation(t *testing.T) {
+	app := setupTestApp(errorService{bridgeErr: errors.New("fail")})
+	r := httptest.NewRequest(http.MethodGet, "/bridge-lifts", nil)
+	resp, _ := app.Test(r)
+	assert.Equal(t, 500, resp.StatusCode)
+}
+
+func TestBridgeLifts_CircuitBreaker503(t *testing.T) {
+	app := setupTestApp(errorService{bridgeErr: gobreaker.ErrOpenState})
+	r := httptest.NewRequest(http.MethodGet, "/bridge-lifts", nil)
+	resp, _ := app.Test(r)
+	assert.Equal(t, 503, resp.StatusCode)
+}
+
+func TestBridgeCalendar_ErrorPropagation(t *testing.T) {
+	app := setupTestApp(errorService{bridgeErr: errors.New("fail")})
+	r := httptest.NewRequest(http.MethodGet, "/bridge-lifts/calendar.ics", nil)
+	resp, _ := app.Test(r)
+	assert.Equal(t, 500, resp.StatusCode)
+}
+
+func TestBridgeCalendar_CircuitBreaker503(t *testing.T) {
+	app := setupTestApp(errorService{bridgeErr: gobreaker.ErrOpenState})
+	r := httptest.NewRequest(http.MethodGet, "/bridge-lifts/calendar.ics", nil)
+	resp, _ := app.Test(r)
+	assert.Equal(t, 503, resp.StatusCode)
+}
+
+func TestVessels_ErrorPropagation(t *testing.T) {
+	app := setupTestApp(errorService{vesselErr: errors.New("fail")})
+	r := httptest.NewRequest(http.MethodGet, "/vessels?type=all", nil)
+	resp, _ := app.Test(r)
+	assert.Equal(t, 500, resp.StatusCode)
+}
+
+func TestVessels_CircuitBreaker503(t *testing.T) {
+	app := setupTestApp(errorService{vesselErr: gobreaker.ErrOpenState})
+	r := httptest.NewRequest(http.MethodGet, "/vessels?type=all", nil)
+	resp, _ := app.Test(r)
+	assert.Equal(t, 503, resp.StatusCode)
+}
+
+func TestVesselsCalendar_ErrorPropagation(t *testing.T) {
+	app := setupTestApp(errorService{vesselErr: errors.New("fail")})
+	r := httptest.NewRequest(http.MethodGet, "/vessels/calendar.ics?type=all", nil)
+	resp, _ := app.Test(r)
+	assert.Equal(t, 500, resp.StatusCode)
+}
+
+func TestVesselsCalendar_CircuitBreaker503(t *testing.T) {
+	app := setupTestApp(errorService{vesselErr: gobreaker.ErrOpenState})
+	r := httptest.NewRequest(http.MethodGet, "/vessels/calendar.ics?type=all", nil)
+	resp, _ := app.Test(r)
+	assert.Equal(t, 503, resp.StatusCode)
+}
+
 func TestAPI_PackageLoads(t *testing.T) {
 	assert.True(t, true)
 }
 
-// Add the full logic from the old test/api_test.go here, with package changed to api and correct imports.
+func TestMain(m *testing.M) {
+	// Ensure logger is initialized for all tests
+	importedLogger.InitLogger()
+	os.Exit(m.Run())
+}

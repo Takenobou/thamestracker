@@ -25,6 +25,10 @@ type Config struct {
 	FallbackCacheTTLSeconds int
 	RequestsPerMin          int
 	MetricsPublic           bool
+
+	// Bridge filter config
+	BridgeFilterPercentile float64 // e.g. 0.10
+	BridgeFilterMaxCount   int     // e.g. 8
 }
 
 var AppConfig Config
@@ -45,6 +49,9 @@ func NewConfig() Config {
 	cfg.RequestsPerMin = 60
 	// metrics endpoint protection default
 	cfg.MetricsPublic = false
+	// bridge filter defaults
+	cfg.BridgeFilterPercentile = 0.10
+	cfg.BridgeFilterMaxCount = 8
 
 	// overrides
 	if portStr := os.Getenv("PORT"); portStr != "" {
@@ -90,6 +97,17 @@ func NewConfig() Config {
 	// optional metrics public flag
 	if mp := os.Getenv("METRICS_PUBLIC"); mp != "" {
 		cfg.MetricsPublic = strings.EqualFold(mp, "true")
+	}
+	// bridge filter overrides
+	if v := os.Getenv("BRIDGE_FILTER_PERCENTILE"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			cfg.BridgeFilterPercentile = f
+		}
+	}
+	if v := os.Getenv("BRIDGE_FILTER_MAX_COUNT"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			cfg.BridgeFilterMaxCount = i
+		}
 	}
 
 	return cfg

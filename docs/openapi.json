@@ -2,7 +2,8 @@
   "openapi": "3.0.0",
   "info": {
     "title": "ThamesTracker API",
-    "version": "v1"
+    "version": "v1",
+    "description": "Bridge filter thresholds for unique=true (\"hybrid unique\") are configurable at runtime via environment variables: BRIDGE_FILTER_PERCENTILE (default 0.10) and BRIDGE_FILTER_MAX_COUNT (default 8). These control how aggressively duplicate bridge lifts are filtered. See README for details."
   },
   "paths": {
     "/bridge-lifts": {
