@@ -3,7 +3,7 @@ module github.com/Takenobou/thamestracker
 go 1.24.0
 
 require (
-	github.com/gofiber/fiber/v2 v2.52.6
+	github.com/gofiber/fiber/v2 v2.52.7
 	github.com/prometheus/common v0.63.0
 )
 
