@@ -2,55 +2,240 @@
   "openapi": "3.0.0",
   "info": {
     "title": "ThamesTracker API",
-    "version": "v1"
+    "version": "v1",
+    "description": "Bridge filter thresholds for unique=true (\"hybrid unique\") are configurable at runtime via environment variables: BRIDGE_FILTER_PERCENTILE (default 0.10) and BRIDGE_FILTER_MAX_COUNT (default 8). These control how aggressively duplicate bridge lifts are filtered. See README for details."
   },
   "paths": {
     "/bridge-lifts": {
       "get": {
+        "summary": "Get upcoming Tower Bridge lift events",
+        "parameters": [
+          {"name": "unique", "in": "query", "schema": {"type": "boolean"}, "description": "Remove duplicate lifts by vessel name"},
+          {"name": "name", "in": "query", "schema": {"type": "string"}, "description": "Filter by vessel name substring"},
+          {"name": "after", "in": "query", "schema": {"type": "string", "format": "date-time"}, "description": "Only events after this timestamp (RFC3339)"},
+          {"name": "before", "in": "query", "schema": {"type": "string", "format": "date-time"}, "description": "Only events before this timestamp (RFC3339)"},
+          {"name": "location", "in": "query", "schema": {"type": "string"}, "description": "Filter by location"}
+        ],
         "responses": {
-          "200": { "description": "Successful response with list of bridge lifts" }
+          "200": {
+            "description": "Successful response with list of bridge lifts",
+            "content": {
+              "application/json": {
+                "schema": {"type": "array", "items": {"$ref": "#/components/schemas/Event"}},
+                "examples": {
+                  "example": {
+                    "value": [
+                      {
+                        "timestamp": "2025-04-05T17:45:00Z",
+                        "vessel_name": "Paddle Steamer Dixie Queen",
+                        "category": "bridge",
+                        "direction": "Up river",
+                        "location": "Tower Bridge Road, London"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {"description": "Invalid query parameters"},
+          "503": {"description": "Service unavailable"}
         }
       }
     },
     "/vessels": {
       "get": {
+        "summary": "Get vessel movements",
+        "parameters": [
+          {"name": "type", "in": "query", "schema": {"type": "string", "enum": ["all", "inport", "arrivals", "departures", "forecast"]}, "description": "Vessel event type"},
+          {"name": "name", "in": "query", "schema": {"type": "string"}, "description": "Filter by vessel name substring"},
+          {"name": "location", "in": "query", "schema": {"type": "string"}, "description": "Filter by location"},
+          {"name": "nationality", "in": "query", "schema": {"type": "string"}, "description": "Filter by vessel nationality"},
+          {"name": "after", "in": "query", "schema": {"type": "string", "format": "date-time"}, "description": "Only events after this timestamp (RFC3339)"},
+          {"name": "before", "in": "query", "schema": {"type": "string", "format": "date-time"}, "description": "Only events before this timestamp (RFC3339)"},
+          {"name": "unique", "in": "query", "schema": {"type": "boolean"}, "description": "Remove duplicate vessel names"}
+        ],
         "responses": {
-          "200": { "description": "Successful response with list of vessels" }
+          "200": {
+            "description": "Successful response with list of vessels",
+            "content": {
+              "application/json": {
+                "schema": {"type": "array", "items": {"$ref": "#/components/schemas/Event"}},
+                "examples": {
+                  "example": {
+                    "value": [
+                      {
+                        "timestamp": "2025-01-25T20:33:47Z",
+                        "vessel_name": "SILVER STURGEON",
+                        "category": "inport",
+                        "voyage_number": "S7670",
+                        "location": "WOODS QUAY"
+                      },
+                      {
+                        "timestamp": "2025-03-13T14:22:09Z",
+                        "vessel_name": "SAN NICOLAS MAERSK",
+                        "category": "arrivals",
+                        "voyage_number": "S7795",
+                        "from": "MAPTM",
+                        "to": "LONDON GATEWAY1",
+                        "location": "LONDON GATEWAY1"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {"description": "Invalid query parameters"},
+          "503": {"description": "Service unavailable"}
         }
       }
     },
     "/bridge-lifts/calendar.ics": {
       "get": {
+        "summary": "Get iCalendar feed for bridge lift events",
+        "parameters": [
+          {"name": "unique", "in": "query", "schema": {"type": "boolean"}, "description": "Remove duplicate lifts by vessel name"},
+          {"name": "name", "in": "query", "schema": {"type": "string"}, "description": "Filter by vessel name substring"},
+          {"name": "after", "in": "query", "schema": {"type": "string", "format": "date-time"}, "description": "Only events after this timestamp (RFC3339)"},
+          {"name": "before", "in": "query", "schema": {"type": "string", "format": "date-time"}, "description": "Only events before this timestamp (RFC3339)"},
+          {"name": "location", "in": "query", "schema": {"type": "string"}, "description": "Filter by location"}
+        ],
         "responses": {
-          "200": { "description": "iCalendar feed for bridge lift events" }
+          "200": {
+            "description": "iCalendar feed for bridge lift events",
+            "content": {
+              "text/calendar": {
+                "examples": {
+                  "example": {
+                    "value": "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ThamesTracker//EN\nBEGIN:VEVENT\nSUMMARY:Tower Bridge Lift - Paddle Steamer Dixie Queen\nDTSTART:20250405T174500Z\nDTEND:20250405T175500Z\nLOCATION:Tower Bridge Road, London\nDESCRIPTION:Direction: Up river\nSTATUS:CONFIRMED\nEND:VEVENT\nEND:VCALENDAR"
+                  }
+                }
+              }
+            }
+          },
+          "400": {"description": "Invalid query parameters"},
+          "503": {"description": "Service unavailable"}
         }
       }
     },
     "/vessels/calendar.ics": {
       "get": {
+        "summary": "Get iCalendar feed for vessel events",
+        "parameters": [
+          {"name": "type", "in": "query", "schema": {"type": "string", "enum": ["all", "inport", "arrivals", "departures", "forecast"]}, "description": "Vessel event type"},
+          {"name": "name", "in": "query", "schema": {"type": "string"}, "description": "Filter by vessel name substring"},
+          {"name": "location", "in": "query", "schema": {"type": "string"}, "description": "Filter by location"},
+          {"name": "nationality", "in": "query", "schema": {"type": "string"}, "description": "Filter by vessel nationality"},
+          {"name": "after", "in": "query", "schema": {"type": "string", "format": "date-time"}, "description": "Only events after this timestamp (RFC3339)"},
+          {"name": "before", "in": "query", "schema": {"type": "string", "format": "date-time"}, "description": "Only events before this timestamp (RFC3339)"},
+          {"name": "unique", "in": "query", "schema": {"type": "boolean"}, "description": "Remove duplicate vessel names"}
+        ],
         "responses": {
-          "200": { "description": "iCalendar feed for vessel events" }
+          "200": {
+            "description": "iCalendar feed for vessel events",
+            "content": {
+              "text/calendar": {
+                "examples": {
+                  "example": {
+                    "value": "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ThamesTracker//EN\nBEGIN:VEVENT\nSUMMARY:Vessel - SILVER STURGEON\nDTSTART:20250125T203347Z\nDTEND:20250125T213347Z\nLOCATION:WOODS QUAY\nDESCRIPTION:Voyage No: S7670\nSTATUS:CONFIRMED\nEND:VEVENT\nEND:VCALENDAR"
+                  }
+                }
+              }
+            }
+          },
+          "400": {"description": "Invalid query parameters"},
+          "503": {"description": "Service unavailable"}
         }
       }
     },
     "/healthz": {
       "get": {
+        "summary": "Health check",
         "responses": {
-          "200": { "description": "OK" }
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"status": {"type": "string"}}}}}},
+          "503": {"description": "Service unavailable"}
         }
       }
     },
     "/locations": {
       "get": {
+        "summary": "Get aggregated vessel counts per location",
+        "parameters": [
+          {"name": "minTotal", "in": "query", "schema": {"type": "integer", "default": 0}, "description": "Only locations with total >= minTotal"},
+          {"name": "q", "in": "query", "schema": {"type": "string"}, "description": "Case-insensitive substring filter on location name"}
+        ],
         "responses": {
-          "200": { "description": "Successful response with location stats" }
+          "200": {
+            "description": "Successful response with location stats",
+            "content": {
+              "application/json": {
+                "schema": {"type": "array", "items": {"$ref": "#/components/schemas/LocationStats"}},
+                "examples": {
+                  "example": {
+                    "value": [
+                      {
+                        "name": "PortA",
+                        "code": "",
+                        "inport": 1,
+                        "arrivals": 2,
+                        "departures": 3,
+                        "forecast": 0,
+                        "total": 6
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {"description": "Invalid query parameters"},
+          "503": {"description": "Service unavailable"}
         }
       }
     },
     "/metrics": {
       "get": {
+        "summary": "Prometheus metrics (enabled if METRICS_PUBLIC=true)",
         "responses": {
-          "200": { "description": "Prometheus metrics" }
+          "200": {"description": "Prometheus metrics", "content": {"text/plain": {}}}
+        }
+      }
+    },
+    "/docs": {
+      "get": {
+        "summary": "Get OpenAPI JSON specification",
+        "responses": {
+          "200": {"description": "OpenAPI JSON", "content": {"application/json": {}}}
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Event": {
+        "type": "object",
+        "properties": {
+          "timestamp": {"type": "string", "format": "date-time"},
+          "vessel_name": {"type": "string"},
+          "category": {"type": "string"},
+          "voyage_number": {"type": "string"},
+          "direction": {"type": "string"},
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "location": {"type": "string"}
+        }
+      },
+      "LocationStats": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "code": {"type": "string"},
+          "inport": {"type": "integer"},
+          "arrivals": {"type": "integer"},
+          "departures": {"type": "integer"},
+          "forecast": {"type": "integer"},
+          "total": {"type": "integer"}
         }
       }
     }

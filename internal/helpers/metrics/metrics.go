@@ -58,9 +58,17 @@ var (
 			Help: "Total number of Redis errors.",
 		},
 	)
+	// FilteredEventsTotal counts events filtered out by unique logic, labeled by category.
+	FilteredEventsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "thamestracker_filtered_events_total",
+			Help: "Total number of events filtered out by unique logic, labeled by category.",
+		},
+		[]string{"category"},
+	)
 )
 
 func init() {
 	prometheus.MustRegister(ScrapeCounter, ScrapeDuration, CacheHits, CacheMisses,
-		LocationsRequests, LocationsRequestDuration, RedisErrorsTotal)
+		LocationsRequests, LocationsRequestDuration, RedisErrorsTotal, FilteredEventsTotal)
 }

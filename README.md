@@ -1,6 +1,18 @@
 # ThamesTracker
 
-ThamesTracker tracks Tower Bridge lift events and vessel movements on the River Thames. It exposes a JSON API, an iCalendar feed, and provides CLI tools.
+ThamesTracker tracks Tower Bridge lift events and vessel movements on the River Thames. It exposes a JSON API, iCalendar feeds, and provides CLI tools.
+
+## Features
+- JSON API for bridge lifts, vessel movements, and location stats
+- iCalendar feeds for bridge lifts and vessel events
+- Query filtering (name, type/category, location, after, before, unique, etc.)
+- Health check endpoint
+- Prometheus metrics endpoint (enabled with `METRICS_PUBLIC=true`)
+- OpenAPI spec served at `/docs`
+- Per-IP rate limiting (configurable)
+- Circuit breaker for external API calls
+- Redis (or in-memory fallback) caching
+- CLI for scraping and fetching data/feeds
 
 ## Quickstart
 ### Local development
@@ -32,6 +44,7 @@ services:
       CACHE_MAX_ENTRIES: 1000
       CACHE_TTL_SECONDS: 3600
       REQUESTS_PER_MIN: 60
+      METRICS_PUBLIC: false
     depends_on:
       - redis
 
@@ -44,17 +57,20 @@ services:
 ## Configuration
 All settings via environment variables. Defaults shown:
 
-| Variable           | Default                                                         | Description                                    |
-|--------------------|-----------------------------------------------------------------|------------------------------------------------|
-| `PORT`             | `8080`                                                          | HTTP port for server                           |
-| `PORT_OF_LONDON`   | `https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists`   | Base URL for Port of London ship API           |
-| `TOWER_BRIDGE`     | `https://www.towerbridge.org.uk/lift-times`                     | URL for Tower Bridge lift times page           |
-| `REDIS_ADDRESS`    | `localhost:6379`                                                | Redis connection address                       |
-| `CB_MAX_FAILURES`  | `5`                                                             | Circuit‑breaker max consecutive failures       |
-| `CB_COOL_OFF`      | `60`                                                            | Circuit‑breaker open timeout (sec)             |
-| `CACHE_MAX_ENTRIES`| `1000`                                                          | Max entries in in‑memory fallback cache        |
-| `CACHE_TTL_SECONDS`| `3600`                                                          | TTL for in‑memory fallback cache (sec)         |
-| `REQUESTS_PER_MIN` | `60`                                                            | Per‑IP rate‑limit (requests per minute)        |
+| Variable                   | Default                                                         | Description                                    |
+|----------------------------|-----------------------------------------------------------------|------------------------------------------------|
+| `PORT`                     | `8080`                                                          | HTTP port for server                           |
+| `PORT_OF_LONDON`           | `https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists`   | Base URL for Port of London ship API           |
+| `TOWER_BRIDGE`             | `https://www.towerbridge.org.uk/lift-times`                     | URL for Tower Bridge lift times page           |
+| `REDIS_ADDRESS`            | `localhost:6379`                                                | Redis connection address                       |
+| `CB_MAX_FAILURES`          | `5`                                                             | Circuit-breaker max consecutive failures       |
+| `CB_COOL_OFF`              | `60`                                                            | Circuit-breaker open timeout (sec)             |
+| `CACHE_MAX_ENTRIES`        | `1000`                                                          | Max entries in in-memory fallback cache        |
+| `CACHE_TTL_SECONDS`        | `3600`                                                          | TTL for in-memory fallback cache (sec)         |
+| `REQUESTS_PER_MIN`         | `60`                                                            | Per-IP rate-limit (requests per minute)        |
+| `METRICS_PUBLIC`           | `false`                                                         | Expose /metrics endpoint if true               |
+| `BRIDGE_FILTER_PERCENTILE` | `0.10`                                                          | Percentile threshold for filtering most frequent bridge lifts when unique=true |
+| `BRIDGE_FILTER_MAX_COUNT`  | `8`                                                             | Max times a vessel can appear in bridge lifts when unique=true |
 
 ## API Reference
 
@@ -62,17 +78,23 @@ All settings via environment variables. Defaults shown:
 Returns upcoming Tower Bridge lift events in JSON.
 
 **Query parameters**:
-- `unique` (boolean, default `false`): remove duplicate lifts by vessel name.
-- `name` (string, optional): filter lifts by vessel name substring.
+- `unique` (boolean, default `false`): remove duplicate lifts by vessel name
+- `name` (string, optional): filter lifts by vessel name substring
+- `after` (RFC3339, optional): only events after this timestamp
+- `before` (RFC3339, optional): only events before this timestamp
+- `location` (string, optional): filter by location
 
-**Response**:
+**Response Example**:
 ```json
-[{
-  "date": "2025-04-05",
-  "time": "17:45",
-  "vessel": "HMS Example",
-  "direction": "Up river"
-}]
+[
+  {
+    "timestamp": "2025-04-05T17:45:00Z",
+    "vessel_name": "Paddle Steamer Dixie Queen",
+    "category": "bridge",
+    "direction": "Up river",
+    "location": "Tower Bridge Road, London"
+  }
+]
 ```
 
 **Example**:
@@ -94,16 +116,17 @@ Returns vessel movements in JSON.
 | `before`     | RFC3339 | —       | include events before this timestamp     |
 | `unique`     | boolean | `false` | remove duplicate vessel names            |
 
-**Response**:
+**Response Example**:
 ```json
-[{
-  "time": "20:33",
-  "date": "25/01/2025",
-  "location_name": "Port Example",
-  "name": "Example Vessel",
-  "voyage_number": "E1234",
-  "type": "inport"
-}]
+[
+  {
+    "timestamp": "2025-01-25T20:33:47Z",
+    "vessel_name": "SILVER STURGEON",
+    "category": "inport",
+    "voyage_number": "S7670",
+    "location": "WOODS QUAY"
+  }
+]
 ```
 
 **Example**:
@@ -115,28 +138,27 @@ curl -s "http://localhost:8080/vessels?type=arrivals&unique=true&after=2025-04-0
 Returns an iCalendar feed for Tower Bridge lift events.
 
 **Query parameters**:
-- `unique` (boolean, default `false`): remove duplicate lifts by vessel name.
-- `name` (string, optional): filter lifts by vessel name substring.
-- `from` (YYYY-MM-DD, optional): include only events starting on or after this date.
-- `to` (YYYY-MM-DD, optional): include only events starting on or before this date.
+- `unique` (boolean, default `false`): remove duplicate lifts by vessel name
+- `name` (string, optional): filter lifts by vessel name substring
+- `after` (RFC3339, optional): only events after this timestamp
+- `before` (RFC3339, optional): only events before this timestamp
+- `location` (string, optional): filter by location
 
 **Example**:
 ```bash
-curl -s "http://localhost:8080/bridge-lifts/calendar.ics?unique=true&from=2025-04-01&to=2025-04-07" > bridge.ics
+curl -s "http://localhost:8080/bridge-lifts/calendar.ics?unique=true&after=2025-04-01T00:00:00Z" > bridge.ics
 ```
 
 ### GET /vessels/calendar.ics
 Returns an iCalendar feed for vessel movements.
 
 **Query parameters**:
-- `type` (string, default `all`): one of `inport`, `arrivals`, `departures`, `forecast`, or `all`.
-- `name`, `location`, `nationality`, `after`, `before`, and `unique` (same filters as JSON `/vessels`).
-- `from` (YYYY-MM-DD, optional): include only events starting on or after this date.
-- `to` (YYYY-MM-DD, optional): include only events starting on or before this date.
+- `type` (string, default `all`): one of `inport`, `arrivals`, `departures`, `forecast`, or `all`
+- `name`, `location`, `nationality`, `after`, `before`, and `unique` (same as `/vessels`)
 
 **Example**:
 ```bash
-curl -s "http://localhost:8080/vessels/calendar.ics?type=arrivals&unique=true&from=2025-04-01&to=2025-04-07" > vessels.ics
+curl -s "http://localhost:8080/vessels/calendar.ics?type=arrivals&unique=true&after=2025-04-01T00:00:00Z" > vessels.ics
 ```
 
 ### GET /docs
@@ -150,11 +172,7 @@ curl -s "http://localhost:8080/docs" | jq .
 ### GET /metrics
 Prometheus metrics endpoint, enabled only when the environment variable `METRICS_PUBLIC=true` is set.
 
-**Response**:
-```
-# HELP thamestracker_external_api_scrapes_total Total number of external API scrapes.
-... other metrics ...
-```
+**Response**: Prometheus metrics text
 
 ### GET /healthz
 Liveness probe. Returns HTTP 200 if Redis and external API are healthy, HTTP 503 otherwise.
@@ -163,7 +181,7 @@ Liveness probe. Returns HTTP 200 if Redis and external API are healthy, HTTP 5
 ```json
 { "status": "ok" }
 ```
-or 
+or
 ```json
 { "status": "fail", "error": "health check error" }
 ```
@@ -172,14 +190,21 @@ or
 Returns aggregated vessel counts per location.
 
 **Query parameters**:
-- `minTotal` (integer, default `0`): include only locations with `total` >= `minTotal`.
-- `q` (string, optional): case-insensitive substring filter on the location `name`.
+- `minTotal` (integer, default `0`): include only locations with `total` >= `minTotal`
+- `q` (string, optional): case-insensitive substring filter on the location `name`
 
-**Response**:
+**Response Example**:
 ```json
 [
-  {"name":"PortA","code":"","inport":1,"arrivals":2,"departures":3,"forecast":0,"total":6},
-  {"name":"PortB","code":"","inport":0,"arrivals":1,"departures":0,"forecast":0,"total":1}
+  {
+    "name": "PortA",
+    "code": "",
+    "inport": 1,
+    "arrivals": 2,
+    "departures": 3,
+    "forecast": 0,
+    "total": 6
+  }
 ]
 ```
 
@@ -188,8 +213,20 @@ Returns aggregated vessel counts per location.
 curl -s "http://localhost:8080/locations?minTotal=5&q=port" | jq .
 ```
 
+## Error Handling
+- 400 Bad Request: Invalid query parameters
+- 503 Service Unavailable: Circuit breaker open or dependency unavailable
+- 500 Internal Server Error: Unexpected errors
+
+## Rate Limiting
+Requests are rate-limited per IP (default: 60/minute, configurable via `REQUESTS_PER_MIN`).
+
+## Caching
+- Redis is used for caching if configured, otherwise an in-memory fallback cache is used.
+- Circuit breaker protects external API calls.
+
 ## CLI Reference
-Built‑in CLI replicates service layer:
+The CLI replicates the service layer and fetches data from the APIs:
 ```bash
 # Bridge lifts (JSON)
 thamestracker bridge-lifts
@@ -206,6 +243,9 @@ thamestracker forecast
 thamestracker bridge-ics > bridge.ics
 thamestracker vessels-ics > vessels.ics
 ```
+
+## Bridge filter tuning
+When using `unique=true` on bridge lift endpoints, the service will filter out vessels that are in the top `BRIDGE_FILTER_PERCENTILE` most frequent lifts, or that appear more than `BRIDGE_FILTER_MAX_COUNT` times. These thresholds can be tuned at runtime via environment variables, no code changes required.
 
 ## License
 MIT

@@ -22,79 +22,63 @@ func MakeUID(eventType, name string, start time.Time) string {
 	return sum[:16]
 }
 
-// DescribeVessel returns a multi-line description for a vessel event.
-func DescribeVessel(v models.Vessel) string {
-	var b strings.Builder
-	// Route
-	if v.Type == "inport" {
-		b.WriteString(fmt.Sprintf("Location: %s\n", v.LocationName))
-	} else {
-		b.WriteString(fmt.Sprintf("Voyage: %s → %s\n", v.LocationFrom, v.LocationTo))
-	}
-	// Nationality
-	if v.Nationality != "" {
-		b.WriteString(fmt.Sprintf("Nationality: %s\n", v.Nationality))
-	}
-	// Arrival/Departure time
-	b.WriteString(fmt.Sprintf("%s: %s %s", strings.Title(v.Type), v.Date, v.Time))
-	return b.String()
-}
-
-// BuildBridgeEvent constructs and configures a VEVENT for a bridge lift.
-func BuildBridgeEvent(cal *ics.Calendar, lift models.BridgeLift, start time.Time) {
-	eid := MakeUID("bridge", lift.Vessel, start)
-	e := cal.AddEvent(eid)
+// BuildEvent constructs and configures a VEVENT for a generic Event.
+func BuildEvent(cal *ics.Calendar, e models.Event) {
+	eid := MakeUID(e.Category, e.VesselName, e.Timestamp)
+	event := cal.AddEvent(eid)
 	now := time.Now()
-	e.SetCreatedTime(now)
-	e.SetDtStampTime(now)
-	e.SetModifiedAt(now)
-	// Set start and end times (time contains proper location info)
-	e.SetStartAt(start)
-	e.SetEndAt(start.Add(10 * time.Minute))
-	e.SetSummary(fmt.Sprintf("Tower Bridge Lift – %s", lift.Vessel))
-	e.SetDescription(fmt.Sprintf("Direction: %s", lift.Direction))
-	e.SetLocation("Tower Bridge Road, London, SE1 2UP, England")
-	e.SetProperty("CATEGORIES", "BRIDGE")
-	e.SetProperty("STATUS", "CONFIRMED")
-	e.SetProperty("GEO", "51.5055;-0.0754")
-	// Default alarm
-	alarm := e.AddAlarm()
-	alarm.SetTrigger("-PT10M")
-	alarm.SetAction("DISPLAY")
-	alarm.SetDescription("Reminder")
-}
+	event.SetCreatedTime(now)
+	event.SetDtStampTime(now)
+	event.SetModifiedAt(now)
 
-// BuildVesselEvent constructs and configures a VEVENT for a vessel event.
-func BuildVesselEvent(cal *ics.Calendar, v models.Vessel, start, end time.Time) {
-	eid := MakeUID(v.Type, v.Name, start)
-	e := cal.AddEvent(eid)
-	now := time.Now()
-	e.SetCreatedTime(now)
-	e.SetDtStampTime(now)
-	e.SetModifiedAt(now)
-	// All-day for inport
-	if v.Type == "inport" {
-		e.SetAllDayStartAt(start)
-		e.SetAllDayEndAt(end)
-		e.SetSummary(fmt.Sprintf("Vessel – %s", v.Name))
-	} else {
-		e.SetStartAt(start)
-		e.SetEndAt(end)
-		e.SetSummary(fmt.Sprintf("Vessel – %s", v.Name))
-	}
-	// Common fields
-	e.SetProperty("CATEGORIES", strings.ToUpper(v.Type))
-	// STATUS
+	description := ""
 	status := "CONFIRMED"
-	if v.Type == "forecast" {
-		status = "TENTATIVE"
+	start := e.Timestamp
+	end := start.Add(15 * time.Minute)
+
+	summary := ""
+	location := ""
+
+	switch strings.ToLower(e.Category) {
+	case "bridge":
+		summary = fmt.Sprintf("Tower Bridge Lift - %s", e.VesselName)
+		location = "Tower Bridge Road, London, SE1 2UP, England"
+		description = fmt.Sprintf("Direction: %s", e.Direction)
+		end = start.Add(10 * time.Minute)
+		event.SetProperty("CATEGORIES", "BRIDGE")
+		event.SetProperty("GEO", "51.5055;-0.0754")
+	case "inport":
+		event.SetAllDayStartAt(start)
+		event.SetAllDayEndAt(start.Add(24 * time.Hour))
+		summary = fmt.Sprintf("Vessel – %s", e.VesselName)
+		location = e.Location
+		desc := fmt.Sprintf("Location: %s", e.Location)
+		if e.From != "" || e.To != "" {
+			desc += fmt.Sprintf("\nVoyage: %s → %s", e.From, e.To)
+		}
+		if e.VoyageNo != "" {
+			desc += fmt.Sprintf("\nVoyage No: %s", e.VoyageNo)
+		}
+		description = desc
+		event.SetProperty("CATEGORIES", "INPORT")
+		goto set_common
+	default:
+		summary = fmt.Sprintf("Vessel - %s", e.VesselName)
+		location = e.Location
+		description = fmt.Sprintf("Voyage: %s → %s\nVoyage No: %s", e.From, e.To, e.VoyageNo)
+		if e.Category == "forecast" {
+			status = "TENTATIVE"
+		}
+		event.SetProperty("CATEGORIES", strings.ToUpper(e.Category))
 	}
-	e.SetProperty("STATUS", status)
-	// Location and description
-	e.SetLocation(v.LocationName)
-	e.SetDescription(DescribeVessel(v))
-	// Default alarm
-	alarm := e.AddAlarm()
+	event.SetStartAt(start)
+	event.SetEndAt(end)
+set_common:
+	event.SetSummary(summary)
+	event.SetLocation(location)
+	event.SetDescription(description)
+	event.SetProperty("STATUS", status)
+	alarm := event.AddAlarm()
 	alarm.SetTrigger("-PT10M")
 	alarm.SetAction("DISPLAY")
 	alarm.SetDescription("Reminder")
