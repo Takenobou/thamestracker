@@ -42,15 +42,16 @@ func BuildEvent(cal *ics.Calendar, e models.Event) {
 	switch strings.ToLower(e.Category) {
 	case "bridge":
 		summary = fmt.Sprintf("Tower Bridge Lift - %s", e.VesselName)
-		location = "Tower Bridge Road, London, SE1 2UP"
+		location = "222 Tower Bridge Road, London, SE1 2UP"
 		description = fmt.Sprintf("Direction: %s", e.Direction)
 		end = start.Add(10 * time.Minute)
 		event.SetProperty("CATEGORIES", "BRIDGE")
-		event.SetProperty("GEO", "51.505507, -0.075402")
+		event.SetProperty("GEO", "51.505507;-0.075402")
+		event.SetProperty("X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=70;X-TITLE=Tower Bridge", "geo:51.505507,-0.075402")
 	case "inport":
 		event.SetAllDayStartAt(start)
 		event.SetAllDayEndAt(start.Add(24 * time.Hour))
-		summary = fmt.Sprintf("Vessel – %s", e.VesselName)
+		summary = fmt.Sprintf("Vessel - %s", e.VesselName)
 		location = e.Location
 		desc := fmt.Sprintf("Location: %s", e.Location)
 		if e.From != "" || e.To != "" {
