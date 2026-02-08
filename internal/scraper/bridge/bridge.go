@@ -3,6 +3,7 @@ package bridge
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,8 +33,7 @@ func ScrapeBridgeLifts() ([]models.Event, error) {
 			logger.Logger.Warnf("Missing datetime for vessel row, skipping")
 			return
 		}
-		ts := strings.TrimSuffix(rawTime, "Z")
-		tParsed, err := time.ParseInLocation("2006-01-02T15:04:05", ts, utils.LondonLocation)
+		tParsed, err := parseBridgeTimestamp(rawTime)
 		if err != nil {
 			logger.Logger.Errorf("Error parsing datetime %s: %v", rawTime, err)
 			return
@@ -99,4 +99,28 @@ type BridgeScraperImpl struct{}
 
 func (BridgeScraperImpl) ScrapeBridgeLifts() ([]models.Event, error) {
 	return ScrapeBridgeLifts()
+}
+
+// parseBridgeTimestamp supports both the current epoch-seconds format and
+// older ISO-like values returned by Tower Bridge pages.
+func parseBridgeTimestamp(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, fmt.Errorf("empty datetime")
+	}
+
+	if epochSeconds, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return time.Unix(epochSeconds, 0).In(utils.LondonLocation), nil
+	}
+
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.In(utils.LondonLocation), nil
+	}
+
+	legacyISO := strings.TrimSuffix(raw, "Z")
+	t, err := time.ParseInLocation("2006-01-02T15:04:05", legacyISO, utils.LondonLocation)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t, nil
 }

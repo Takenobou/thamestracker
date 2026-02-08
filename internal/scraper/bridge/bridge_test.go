@@ -198,3 +198,23 @@ func BenchmarkScrapeBridgeLifts(b *testing.B) {
 		}
 	}
 }
+
+func TestParseBridgeTimestamp_EpochSeconds(t *testing.T) {
+	ts, err := parseBridgeTimestamp("1776568500")
+	assert.NoError(t, err)
+	assert.Equal(t, 2026, ts.Year())
+	assert.Equal(t, time.April, ts.Month())
+	assert.Equal(t, 19, ts.Day())
+	assert.Equal(t, 4, ts.Hour())
+	assert.Equal(t, 15, ts.Minute())
+}
+
+func TestParseBridgeTimestamp_RFC3339(t *testing.T) {
+	ts, err := parseBridgeTimestamp("2025-04-05T17:45:00Z")
+	assert.NoError(t, err)
+	assert.Equal(t, 2025, ts.Year())
+	assert.Equal(t, time.April, ts.Month())
+	assert.Equal(t, 5, ts.Day())
+	assert.Equal(t, 18, ts.Hour())
+	assert.Equal(t, 45, ts.Minute())
+}
