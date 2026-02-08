@@ -26,10 +26,9 @@ func main() {
 	// initialize service layer
 	cacheClient := cache.NewRedisCache(config.AppConfig.Redis.Address)
 	svc := service.NewService(
-		httpclient.DefaultClient,
 		cacheClient,
 		bridgeScraper.BridgeScraperImpl{},
-		vesselScraper.VesselScraperImpl{},
+		vesselScraper.VesselScraperImpl{Client: httpclient.DefaultClient},
 	)
 
 	if len(os.Args) < 2 {

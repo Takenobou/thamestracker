@@ -37,6 +37,11 @@ type HealthSvc interface {
 	HealthCheck(ctx context.Context) error
 }
 
+// ReadinessSvc defines interface for readiness check.
+type ReadinessSvc interface {
+	ReadyCheck(ctx context.Context) error
+}
+
 // LocationSvc defines interface for location stats.
 type LocationSvc interface {
 	ListLocations() ([]service.LocationStats, error)
@@ -47,24 +52,33 @@ type ServiceInterface interface {
 	BridgeSvc
 	VesselSvc
 	HealthSvc
+	ReadinessSvc
 	LocationSvc
 }
 
 // APIHandler holds separate service interfaces.
 type APIHandler struct {
-	bridge   BridgeSvc
-	vessel   VesselSvc
-	health   HealthSvc
-	location LocationSvc
+	bridge    BridgeSvc
+	vessel    VesselSvc
+	health    HealthSvc
+	readiness ReadinessSvc
+	location  LocationSvc
 }
 
 // NewAPIHandler creates APIHandler from a combined service.
 func NewAPIHandler(svc ServiceInterface) *APIHandler {
-	return &APIHandler{bridge: svc, vessel: svc, health: svc, location: svc}
+	return &APIHandler{bridge: svc, vessel: svc, health: svc, readiness: svc, location: svc}
 }
 
 func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c, "bridge")
+	if err := validateBridgeQueryOptions(opts); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if opts.Category == "all" {
+		opts.Category = "bridge"
+	}
+
 	events, err := h.bridge.GetBridgeLifts()
 	if err != nil {
 		if errors.Is(err, gobreaker.ErrOpenState) {
@@ -89,20 +103,10 @@ func (h *APIHandler) GetBridgeLifts(c *fiber.Ctx) error {
 
 func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c, "all")
-	validTypes := map[string]bool{"all": true, "inport": true, "arrivals": true, "departures": true, "forecast": true}
-	if !validTypes[opts.Category] {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": fmt.Sprintf("invalid type: %s", opts.Category)})
+	if err := validateVesselQueryOptions(opts); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	if opts.After != "" {
-		if _, err := time.Parse(time.RFC3339, opts.After); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid after parameter"})
-		}
-	}
-	if opts.Before != "" {
-		if _, err := time.Parse(time.RFC3339, opts.Before); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid before parameter"})
-		}
-	}
+
 	events, err := h.vessel.GetVessels(opts.Category)
 	if err != nil {
 		if errors.Is(err, gobreaker.ErrOpenState) {
@@ -116,12 +120,13 @@ func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve vessel data"})
 	}
 	filtered := utils.FilterEvents(events, utils.FilterOptions{
-		Name:     opts.Name,
-		Category: opts.Category,
-		After:    opts.After,
-		Before:   opts.Before,
-		Unique:   opts.Unique,
-		Location: opts.Location,
+		Name:        opts.Name,
+		Category:    opts.Category,
+		Nationality: opts.Nationality,
+		After:       opts.After,
+		Before:      opts.Before,
+		Unique:      opts.Unique,
+		Location:    opts.Location,
 	})
 	return c.JSON(filtered)
 }
@@ -129,6 +134,13 @@ func (h *APIHandler) GetVessels(c *fiber.Ctx) error {
 // BridgeCalendarHandler returns iCalendar feed with only bridge lift events.
 func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c, "bridge")
+	if err := validateBridgeQueryOptions(opts); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if opts.Category == "all" {
+		opts.Category = "bridge"
+	}
+
 	events, err := h.bridge.GetBridgeLifts()
 	if err != nil {
 		if errors.Is(err, gobreaker.ErrOpenState) {
@@ -164,6 +176,10 @@ func (h *APIHandler) BridgeCalendarHandler(c *fiber.Ctx) error {
 // VesselsCalendarHandler returns iCalendar feed with only vessel events.
 func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
 	opts := ParseQueryOptions(c, "all")
+	if err := validateVesselQueryOptions(opts); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	events, err := h.vessel.GetVessels(opts.Category)
 	if err != nil {
 		if errors.Is(err, gobreaker.ErrOpenState) {
@@ -174,12 +190,13 @@ func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to retrieve vessel data"})
 	}
 	filtered := utils.FilterEvents(events, utils.FilterOptions{
-		Name:     opts.Name,
-		Category: opts.Category,
-		After:    opts.After,
-		Before:   opts.Before,
-		Unique:   opts.Unique,
-		Location: opts.Location,
+		Name:        opts.Name,
+		Category:    opts.Category,
+		Nationality: opts.Nationality,
+		After:       opts.After,
+		Before:      opts.Before,
+		Unique:      opts.Unique,
+		Location:    opts.Location,
 	})
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
@@ -197,6 +214,14 @@ func (h *APIHandler) VesselsCalendarHandler(c *fiber.Ctx) error {
 // Healthz returns 200 OK if dependencies are healthy, 503 otherwise.
 func (h *APIHandler) Healthz(c *fiber.Ctx) error {
 	if err := h.health.HealthCheck(c.UserContext()); err != nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"status": "fail", "error": err.Error()})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
+}
+
+// Readyz returns 200 OK if dependencies are ready, 503 otherwise.
+func (h *APIHandler) Readyz(c *fiber.Ctx) error {
+	if err := h.readiness.ReadyCheck(c.UserContext()); err != nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"status": "fail", "error": err.Error()})
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
@@ -235,4 +260,42 @@ func (h *APIHandler) GetLocations(c *fiber.Ctx) error {
 	// log at most one structured line
 	logger.Logger.Infof("path=/locations hits=%d", len(out))
 	return c.JSON(out)
+}
+
+func validateVesselQueryOptions(opts QueryOptions) error {
+	validTypes := map[string]bool{"all": true, "inport": true, "arrivals": true, "departures": true, "forecast": true}
+	if !validTypes[opts.Category] {
+		return fmt.Errorf("invalid type: %s", opts.Category)
+	}
+	return validateTimeRange(opts.After, opts.Before)
+}
+
+func validateBridgeQueryOptions(opts QueryOptions) error {
+	if opts.Category != "" && opts.Category != "bridge" && opts.Category != "all" {
+		return fmt.Errorf("invalid type: %s", opts.Category)
+	}
+	return validateTimeRange(opts.After, opts.Before)
+}
+
+func validateTimeRange(after string, before string) error {
+	var afterTS time.Time
+	var beforeTS time.Time
+	var err error
+
+	if after != "" {
+		afterTS, err = time.Parse(time.RFC3339, after)
+		if err != nil {
+			return fmt.Errorf("invalid after parameter")
+		}
+	}
+	if before != "" {
+		beforeTS, err = time.Parse(time.RFC3339, before)
+		if err != nil {
+			return fmt.Errorf("invalid before parameter")
+		}
+	}
+	if !afterTS.IsZero() && !beforeTS.IsZero() && afterTS.After(beforeTS) {
+		return fmt.Errorf("after must be before or equal to before")
+	}
+	return nil
 }

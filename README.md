@@ -39,6 +39,7 @@ services:
       PORT_OF_LONDON: https://pla.co.uk/pla-proxy/five-minute?url=ships/lists
       TOWER_BRIDGE: https://www.towerbridge.org.uk/flat/lift-times
       REDIS_ADDRESS: redis://redis:6379
+      REDIS_INSECURE_SKIP_VERIFY: false
       CB_MAX_FAILURES: 5
       CB_COOL_OFF: 60
       CACHE_MAX_ENTRIES: 1000
@@ -63,6 +64,7 @@ All settings via environment variables. Defaults shown:
 | `PORT_OF_LONDON`           | `https://pla.co.uk/pla-proxy/five-minute?url=ships/lists`       | Base URL for Port of London ship API           |
 | `TOWER_BRIDGE`             | `https://www.towerbridge.org.uk/flat/lift-times`                | URL for Tower Bridge lift times page           |
 | `REDIS_ADDRESS`            | `localhost:6379`                                                | Redis connection address                       |
+| `REDIS_INSECURE_SKIP_VERIFY` | `false`                                                       | Skip TLS certificate verification for `rediss://` (not recommended) |
 | `CB_MAX_FAILURES`          | `5`                                                             | Circuit-breaker max consecutive failures       |
 | `CB_COOL_OFF`              | `60`                                                            | Circuit-breaker open timeout (sec)             |
 | `CACHE_MAX_ENTRIES`        | `1000`                                                          | Max entries in in-memory fallback cache        |
@@ -175,7 +177,15 @@ Prometheus metrics endpoint, enabled only when the environment variable `METRICS
 **Response**: Prometheus metrics text
 
 ### GET /healthz
-Liveness probe. Returns HTTP 200 if Redis and external API are healthy, HTTP 503 otherwise.
+Liveness probe. Returns HTTP 200 when the process is running.
+
+**Response**:
+```json
+{ "status": "ok" }
+```
+
+### GET /readyz
+Readiness probe. Returns HTTP 200 when dependencies are reachable (Redis, upstream API), HTTP 503 otherwise.
 
 **Response**:
 ```json

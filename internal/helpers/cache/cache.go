@@ -53,7 +53,10 @@ func NewRedisCache(addr string) Cache {
 		}
 		// TLS for rediss scheme or ssl param
 		if u.Scheme == "rediss" || strings.EqualFold(u.Query().Get("ssl"), "true") {
-			opts.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+			opts.TLSConfig = &tls.Config{
+				MinVersion:         tls.VersionTLS12,
+				InsecureSkipVerify: config.AppConfig.Redis.InsecureSkipVerify,
+			}
 		}
 	} else {
 		opts.Addr = addr

@@ -11,12 +11,13 @@ import (
 
 // FilterOptions defines generic filters for Event slices.
 type FilterOptions struct {
-	Name     string
-	Category string
-	After    string
-	Before   string
-	Unique   bool
-	Location string
+	Name        string
+	Nationality string
+	Category    string
+	After       string
+	Before      string
+	Unique      bool
+	Location    string
 	// Bridge filter params
 	BridgeFilterPercentile float64 // optional, only for bridge
 	BridgeFilterMaxCount   int     // optional, only for bridge
@@ -26,6 +27,7 @@ type FilterOptions struct {
 func FilterEvents(events []models.Event, opts FilterOptions) []models.Event {
 	var filtered []models.Event
 	name := strings.ToLower(opts.Name)
+	nationality := strings.ToLower(opts.Nationality)
 	category := strings.ToLower(opts.Category)
 	location := strings.ToLower(opts.Location)
 	var after, before time.Time
@@ -46,6 +48,9 @@ func FilterEvents(events []models.Event, opts FilterOptions) []models.Event {
 	}
 	for _, e := range events {
 		if name != "" && !strings.Contains(strings.ToLower(e.VesselName), name) {
+			continue
+		}
+		if nationality != "" && !strings.Contains(strings.ToLower(e.Nationality), nationality) {
 			continue
 		}
 		if category != "" && category != "all" && strings.ToLower(e.Category) != category {

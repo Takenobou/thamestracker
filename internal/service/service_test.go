@@ -78,7 +78,7 @@ func (f *fakeVesselScraper) ScrapeVessels(vesselType string) ([]models.Event, er
 func TestGetBridgeLifts_CacheHit(t *testing.T) {
 	cache := newFakeCache()
 	cache.Set("bridge_lifts", []models.Event{{VesselName: "Cached"}}, 0)
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{})
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{})
 	res, err := svc.GetBridgeLifts()
 	assert.NoError(t, err)
 	assert.Equal(t, "Cached", res[0].VesselName)
@@ -87,7 +87,7 @@ func TestGetBridgeLifts_CacheHit(t *testing.T) {
 func TestGetBridgeLifts_CacheMissAndScraper(t *testing.T) {
 	cache := newFakeCache()
 	called := false
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{
+	svc := service.NewService(cache, &fakeBridgeScraper{
 		result: []models.Event{{VesselName: "Scraped"}},
 		called: &called,
 	}, &fakeVesselScraper{})
@@ -99,7 +99,7 @@ func TestGetBridgeLifts_CacheMissAndScraper(t *testing.T) {
 
 func TestGetBridgeLifts_ScraperError(t *testing.T) {
 	cache := newFakeCache()
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{err: errors.New("fail")}, &fakeVesselScraper{})
+	svc := service.NewService(cache, &fakeBridgeScraper{err: errors.New("fail")}, &fakeVesselScraper{})
 	_, err := svc.GetBridgeLifts()
 	assert.Error(t, err)
 }
@@ -107,9 +107,11 @@ func TestGetBridgeLifts_ScraperError(t *testing.T) {
 func TestGetBridgeLifts_CacheSetError(t *testing.T) {
 	cache := newFakeCache()
 	cache.failSet = true
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{result: []models.Event{{VesselName: "Scraped"}}}, &fakeVesselScraper{})
-	_, err := svc.GetBridgeLifts()
-	assert.Error(t, err)
+	svc := service.NewService(cache, &fakeBridgeScraper{result: []models.Event{{VesselName: "Scraped"}}}, &fakeVesselScraper{})
+	res, err := svc.GetBridgeLifts()
+	assert.NoError(t, err)
+	assert.Len(t, res, 1)
+	assert.Equal(t, "Scraped", res[0].VesselName)
 }
 
 func TestGetVessels_AllTypes(t *testing.T) {
@@ -121,7 +123,7 @@ func TestGetVessels_AllTypes(t *testing.T) {
 		"forecast":   {{VesselName: "forecast"}},
 		"all":        {{VesselName: "all"}},
 	}
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{result: results})
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{result: results})
 	for _, typ := range []string{"inport", "arrivals", "departures", "forecast", "all"} {
 		res, err := svc.GetVessels(typ)
 		assert.NoError(t, err)
@@ -131,7 +133,7 @@ func TestGetVessels_AllTypes(t *testing.T) {
 
 func TestGetVessels_InvalidType(t *testing.T) {
 	cache := newFakeCache()
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{})
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{})
 	_, err := svc.GetVessels("badtype")
 	assert.Error(t, err)
 }
@@ -139,7 +141,7 @@ func TestGetVessels_InvalidType(t *testing.T) {
 func TestGetVessels_CacheHit(t *testing.T) {
 	cache := newFakeCache()
 	cache.Set("v3_vessels_inport", []models.Event{{VesselName: "Cached"}}, 0)
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{})
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{})
 	res, err := svc.GetVessels("inport")
 	assert.NoError(t, err)
 	assert.Equal(t, "Cached", res[0].VesselName)
@@ -147,7 +149,7 @@ func TestGetVessels_CacheHit(t *testing.T) {
 
 func TestGetVessels_ScraperError(t *testing.T) {
 	cache := newFakeCache()
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{err: errors.New("fail")})
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{err: errors.New("fail")})
 	_, err := svc.GetVessels("inport")
 	assert.Error(t, err)
 }
@@ -156,15 +158,17 @@ func TestGetVessels_CacheSetError(t *testing.T) {
 	cache := newFakeCache()
 	cache.failSet = true
 	results := map[string][]models.Event{"inport": {{VesselName: "Scraped"}}}
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{result: results})
-	_, err := svc.GetVessels("inport")
-	assert.Error(t, err)
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{result: results})
+	res, err := svc.GetVessels("inport")
+	assert.NoError(t, err)
+	assert.Len(t, res, 1)
+	assert.Equal(t, "Scraped", res[0].VesselName)
 }
 
 func TestGetFilteredVessels_NoLocation(t *testing.T) {
 	cache := newFakeCache()
 	results := map[string][]models.Event{"inport": {{VesselName: "A"}}}
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{result: results})
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{result: results})
 	res, err := svc.GetFilteredVessels("inport", "")
 	assert.NoError(t, err)
 	assert.Equal(t, "A", res[0].VesselName)
@@ -173,7 +177,7 @@ func TestGetFilteredVessels_NoLocation(t *testing.T) {
 func TestGetFilteredVessels_CacheHit(t *testing.T) {
 	cache := newFakeCache()
 	cache.Set("v3_vessels_inport_location_L1", []models.Event{{VesselName: "Cached", Location: "L1"}}, 0)
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{})
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{})
 	res, err := svc.GetFilteredVessels("inport", "L1")
 	assert.NoError(t, err)
 	assert.Equal(t, "Cached", res[0].VesselName)
@@ -182,7 +186,7 @@ func TestGetFilteredVessels_CacheHit(t *testing.T) {
 func TestGetFilteredVessels_CacheMissAndFilter(t *testing.T) {
 	cache := newFakeCache()
 	results := map[string][]models.Event{"inport": {{VesselName: "A", Location: "L1"}, {VesselName: "B", Location: "L2"}}}
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{result: results})
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{result: results})
 	res, err := svc.GetFilteredVessels("inport", "L1")
 	assert.NoError(t, err)
 	assert.Len(t, res, 1)
@@ -197,7 +201,7 @@ func TestListLocations(t *testing.T) {
 		{VesselName: "C", Category: "departures", From: "Port2"},
 		{VesselName: "D", Category: "forecast", To: "Port2"},
 	}}
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{result: results})
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{result: results})
 	locs, err := svc.ListLocations()
 	assert.NoError(t, err)
 	assert.Len(t, locs, 2)
@@ -211,7 +215,7 @@ func TestListLocations(t *testing.T) {
 
 func TestListLocations_Error(t *testing.T) {
 	cache := newFakeCache()
-	svc := service.NewService(nil, cache, &fakeBridgeScraper{}, &fakeVesselScraper{err: errors.New("fail")})
+	svc := service.NewService(cache, &fakeBridgeScraper{}, &fakeVesselScraper{err: errors.New("fail")})
 	_, err := svc.ListLocations()
 	assert.Error(t, err)
 }
