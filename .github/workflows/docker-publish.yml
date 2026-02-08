@@ -1,16 +1,17 @@
 name: Docker
 
 on:
-  schedule:
-    - cron: '42 9 * * *'
   push:
     branches: [ "main" ]
     tags: [ 'v*.*.*' ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
