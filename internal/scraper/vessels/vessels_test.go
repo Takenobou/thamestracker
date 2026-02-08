@@ -137,8 +137,8 @@ func TestScrapeVessels_EmptyLists(t *testing.T) {
 	assert.Empty(t, events)
 }
 
-func TestScrapeVessels_TimestampFallback(t *testing.T) {
-	badTimeJSON := `{"inport":[{"location_name":"WOODS QUAY","vessel_name":"SILVER STURGEON","visit":"S7670","last_rep_dt":"badtime"}]}`
+func TestScrapeVessels_TimestampFallbackToLastUpdated(t *testing.T) {
+	badTimeJSON := `{"inport":[{"location_name":"WOODS QUAY","vessel_name":"SILVER STURGEON","visit":"S7670","last_rep_dt":"badtime","last_updated":"2025-01-25 20:33:47.150"}]}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(badTimeJSON))
@@ -148,9 +148,24 @@ func TestScrapeVessels_TimestampFallback(t *testing.T) {
 	events, err := vessels.ScrapeVessels("inport")
 	assert.NoError(t, err)
 	assert.Len(t, events, 1)
-	// Should fallback to now, so timestamp is close to now
-	delta := time.Since(events[0].Timestamp)
-	assert.Less(t, delta.Seconds(), 5.0)
+	assert.Equal(t, 2025, events[0].Timestamp.Year())
+	assert.Equal(t, time.January, events[0].Timestamp.Month())
+	assert.Equal(t, 25, events[0].Timestamp.Day())
+	assert.Equal(t, 20, events[0].Timestamp.Hour())
+	assert.Equal(t, 33, events[0].Timestamp.Minute())
+}
+
+func TestScrapeVessels_TimestampInvalidAndNoFallbackSkipsRow(t *testing.T) {
+	badTimeJSON := `{"inport":[{"location_name":"WOODS QUAY","vessel_name":"SILVER STURGEON","visit":"S7670","last_rep_dt":"badtime"}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(badTimeJSON))
+	}))
+	defer server.Close()
+	config.AppConfig.URLs.PortOfLondon = server.URL
+	events, err := vessels.ScrapeVessels("inport")
+	assert.NoError(t, err)
+	assert.Empty(t, events)
 }
 
 func BenchmarkScrapeVessels(b *testing.B) {

@@ -32,10 +32,19 @@ type vesselData struct {
 	LastRepDT    string `json:"last_rep_dt,omitempty"`
 	FirstRepDT   string `json:"first_rep_dt,omitempty"` // Used in departures
 	ETADate      string `json:"etad_dt,omitempty"`      // Used in forecast
+	LastUpdated  string `json:"last_updated,omitempty"` // Used as fallback timestamp
 }
 
 // ScrapeVessels fetches vessel data as unified events based on the type (arrivals, departures, inport, forecast).
 func ScrapeVessels(vesselType string) ([]models.Event, error) {
+	return scrapeVesselsWithClient(httpclient.DefaultClient, vesselType)
+}
+
+func scrapeVesselsWithClient(client httpclient.Client, vesselType string) ([]models.Event, error) {
+	if client == nil {
+		client = httpclient.DefaultClient
+	}
+
 	apiURL := config.AppConfig.URLs.PortOfLondon
 	if apiURL == "" {
 		logger.Logger.Errorf("Port of London API URL is missing: set PORT_OF_LONDON environment variable")
@@ -45,7 +54,7 @@ func ScrapeVessels(vesselType string) ([]models.Event, error) {
 
 	var resp *http.Response
 	err := utils.Retry(3, 500*time.Millisecond, func() error {
-		r, e := httpclient.DefaultClient.Get(apiURL)
+		r, e := client.Get(apiURL)
 		if e != nil {
 			logger.Logger.Warnf("Fetch failed: %v", e)
 			return e
@@ -75,15 +84,6 @@ func ScrapeVessels(vesselType string) ([]models.Event, error) {
 
 	events := make([]models.Event, 0)
 
-	parseTimestamp := func(raw string) time.Time {
-		if raw != "" {
-			if t, err := time.ParseInLocation(utils.SrcLayout, raw, utils.LondonLocation); err == nil {
-				return t
-			}
-		}
-		return time.Now().In(utils.LondonLocation)
-	}
-
 	processVessels := func(vesselList []vesselData, category string) {
 		for _, item := range vesselList {
 			if item.VesselName == "" {
@@ -104,16 +104,21 @@ func ScrapeVessels(vesselType string) ([]models.Event, error) {
 			default:
 				ts = item.LastRepDT
 			}
-			tParsed := parseTimestamp(ts)
+			tParsed, ok := parseVesselTimestamp(ts, item.LastUpdated)
+			if !ok {
+				logger.Logger.Warnf("Missing/invalid timestamp for vessel %s in category %s, skipping", item.VesselName, category)
+				continue
+			}
 
 			event := models.Event{
-				Timestamp:  tParsed,
-				VesselName: item.VesselName,
-				Category:   category,
-				VoyageNo:   item.Visit,
-				From:       item.LocationFrom,
-				To:         item.LocationTo,
-				Location:   item.LocationName,
+				Timestamp:   tParsed,
+				VesselName:  item.VesselName,
+				Category:    category,
+				VoyageNo:    item.Visit,
+				Nationality: item.Nationality,
+				From:        item.LocationFrom,
+				To:          item.LocationTo,
+				Location:    item.LocationName,
 			}
 			events = append(events, event)
 		}
@@ -146,8 +151,28 @@ func ScrapeVessels(vesselType string) ([]models.Event, error) {
 }
 
 // VesselScraperImpl implements service.VesselScraper
-type VesselScraperImpl struct{}
+type VesselScraperImpl struct {
+	Client httpclient.Client
+}
 
-func (VesselScraperImpl) ScrapeVessels(vesselType string) ([]models.Event, error) {
-	return ScrapeVessels(vesselType)
+func (v VesselScraperImpl) ScrapeVessels(vesselType string) ([]models.Event, error) {
+	client := v.Client
+	if client == nil {
+		client = httpclient.DefaultClient
+	}
+	return scrapeVesselsWithClient(client, vesselType)
+}
+
+func parseVesselTimestamp(raw string, fallback string) (time.Time, bool) {
+	if raw != "" {
+		if t, err := time.ParseInLocation(utils.SrcLayout, raw, utils.LondonLocation); err == nil {
+			return t, true
+		}
+	}
+	if fallback != "" {
+		if t, err := time.ParseInLocation(utils.SrcLayout, fallback, utils.LondonLocation); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }

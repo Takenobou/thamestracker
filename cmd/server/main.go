@@ -35,10 +35,9 @@ func main() {
 		config.AppConfig.CircuitBreaker.MaxFailures,
 		config.AppConfig.CircuitBreaker.CoolOffSeconds)
 	svc := service.NewService(
-		breakerClient,
 		cacheClient,
 		bridgeScraper.BridgeScraperImpl{},
-		vesselScraper.VesselScraperImpl{},
+		vesselScraper.VesselScraperImpl{Client: breakerClient},
 	)
 	handler := api.NewAPIHandler(svc)
 
