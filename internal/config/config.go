@@ -15,7 +15,8 @@ type Config struct {
 		TowerBridge  string
 	}
 	Redis struct {
-		Address string
+		Address            string
+		InsecureSkipVerify bool
 	}
 	CircuitBreaker struct {
 		MaxFailures    int
@@ -40,6 +41,7 @@ func NewConfig() Config {
 	cfg.URLs.PortOfLondon = "https://pla.co.uk/pla-proxy/five-minute?url=ships/lists"
 	cfg.URLs.TowerBridge = "https://www.towerbridge.org.uk/flat/lift-times"
 	cfg.Redis.Address = "localhost:6379"
+	cfg.Redis.InsecureSkipVerify = false
 	// circuit breaker defaults
 	cfg.CircuitBreaker.MaxFailures = 5
 	cfg.CircuitBreaker.CoolOffSeconds = 60
@@ -67,6 +69,9 @@ func NewConfig() Config {
 	}
 	if v := os.Getenv("REDIS_ADDRESS"); v != "" {
 		cfg.Redis.Address = v
+	}
+	if v := os.Getenv("REDIS_INSECURE_SKIP_VERIFY"); strings.EqualFold(v, "true") {
+		cfg.Redis.InsecureSkipVerify = true
 	}
 	if v := os.Getenv("CB_MAX_FAILURES"); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {

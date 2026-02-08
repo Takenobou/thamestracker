@@ -17,6 +17,8 @@ func TestLoadConfig(t *testing.T) {
 	assert.NoError(t, err)
 	err = os.Setenv("REDIS_ADDRESS", "redis://localhost:6380")
 	assert.NoError(t, err)
+	err = os.Setenv("REDIS_INSECURE_SKIP_VERIFY", "true")
+	assert.NoError(t, err)
 
 	// Instantiate config
 	cfg := NewConfig()
@@ -24,4 +26,5 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "http://fake.london", cfg.URLs.PortOfLondon)
 	assert.Equal(t, "http://fake.bridge", cfg.URLs.TowerBridge)
 	assert.Equal(t, "redis://localhost:6380", cfg.Redis.Address)
+	assert.Equal(t, true, cfg.Redis.InsecureSkipVerify)
 }
