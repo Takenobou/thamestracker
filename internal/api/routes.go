@@ -18,6 +18,7 @@ func SetupRoutes(app *fiber.App, handler *APIHandler) {
 	app.Get("/bridge-lifts/calendar.ics", handler.BridgeCalendarHandler)
 	app.Get("/vessels/calendar.ics", handler.VesselsCalendarHandler)
 	app.Get("/healthz", handler.Healthz)
+	app.Get("/readyz", handler.Readyz)
 	app.Get("/locations", handler.GetLocations)
 	// Prometheus metrics endpoint (registered only when public)
 	if config.AppConfig.MetricsPublic {
