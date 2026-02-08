@@ -12,7 +12,6 @@ import (
 	keycache "github.com/Takenobou/thamestracker/internal/cache"
 	"github.com/Takenobou/thamestracker/internal/config"
 	cache "github.com/Takenobou/thamestracker/internal/helpers/cache"
-	"github.com/Takenobou/thamestracker/internal/helpers/httpclient"
 	"github.com/Takenobou/thamestracker/internal/helpers/logger"
 	"github.com/Takenobou/thamestracker/internal/helpers/metrics"
 	"github.com/Takenobou/thamestracker/internal/models"
@@ -33,16 +32,14 @@ type VesselScraper interface {
 // Update Service struct to use the interfaces
 
 type Service struct {
-	HTTPClient    httpclient.Client
 	Cache         cache.Cache
 	BridgeScraper BridgeScraper
 	VesselScraper VesselScraper
 }
 
 // Update NewService to accept the new dependencies
-func NewService(httpClient httpclient.Client, cache cache.Cache, bridgeScraper BridgeScraper, vesselScraper VesselScraper) *Service {
+func NewService(cache cache.Cache, bridgeScraper BridgeScraper, vesselScraper VesselScraper) *Service {
 	return &Service{
-		HTTPClient:    httpClient,
 		Cache:         cache,
 		BridgeScraper: bridgeScraper,
 		VesselScraper: vesselScraper,
@@ -76,7 +73,6 @@ func (s *Service) GetBridgeLifts() ([]models.Event, error) {
 		events = l
 		if err3 := s.Cache.Set(key, events, 15*time.Minute); err3 != nil {
 			logger.Logger.Errorf("Failed to cache bridge_lifts: %v", err3)
-			return nil, err3
 		}
 	} else {
 		metrics.CacheHits.Inc()
@@ -108,7 +104,6 @@ func (s *Service) GetVessels(vesselType string) ([]models.Event, error) {
 		events = data
 		if err3 := s.Cache.Set(key, events, 30*time.Minute); err3 != nil {
 			logger.Logger.Errorf("Failed to cache %s: %v", key, err3)
-			return nil, err3
 		}
 	} else {
 		metrics.CacheHits.Inc()
@@ -209,28 +204,46 @@ func (s *Service) ListLocations() ([]LocationStats, error) {
 	return list, nil
 }
 
+// HealthCheck is a liveness check.
 func (s *Service) HealthCheck(ctx context.Context) error {
-	// Ping Redis with context cancellation support
-	rdb := getRedisClient()
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		return fmt.Errorf("redis ping failed: %w", err)
+	return nil
+}
+
+// ReadyCheck verifies dependency readiness.
+func (s *Service) ReadyCheck(ctx context.Context) error {
+	if strings.TrimSpace(config.AppConfig.Redis.Address) != "" {
+		rdb := getRedisClient()
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			return fmt.Errorf("redis ping failed: %w", err)
+		}
 	}
-	// Check external API via HEAD with context
+
+	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, config.AppConfig.URLs.PortOfLondon, nil)
 	if err != nil {
 		return fmt.Errorf("creating HEAD request failed: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("external API HEAD failed: %w", err)
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
+
+	if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusNotImplemented {
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, config.AppConfig.URLs.PortOfLondon, nil)
+		if err != nil {
+			return fmt.Errorf("creating GET request failed: %w", err)
+		}
+		resp, err = client.Do(req)
+		if err != nil {
+			return fmt.Errorf("external API GET failed: %w", err)
+		}
+		resp.Body.Close()
+	}
+
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("external API returned status %d", resp.StatusCode)
 	}
-	// also ensure ListLocations works
-	if _, err := s.ListLocations(); err != nil {
-		return fmt.Errorf("ListLocations health check failed: %w", err)
-	}
+
 	return nil
 }
