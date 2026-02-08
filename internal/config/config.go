@@ -37,8 +37,8 @@ func NewConfig() Config {
 	var cfg Config
 	// defaults
 	cfg.Server.Port = 8080
-	cfg.URLs.PortOfLondon = "https://pla.co.uk/pla-proxy/five-minute?url=ships/lists"
-	cfg.URLs.TowerBridge = "https://www.towerbridge.org.uk/flat/lift-times"
+	cfg.URLs.PortOfLondon = "https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists"
+	cfg.URLs.TowerBridge = "https://www.towerbridge.org.uk/lift-times"
 	cfg.Redis.Address = "localhost:6379"
 	// circuit breaker defaults
 	cfg.CircuitBreaker.MaxFailures = 5

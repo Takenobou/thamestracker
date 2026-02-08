@@ -36,8 +36,8 @@ services:
       - "8080:8080"
     environment:
       PORT: 8080
-      PORT_OF_LONDON: https://pla.co.uk/pla-proxy/five-minute?url=ships/lists
-      TOWER_BRIDGE: https://www.towerbridge.org.uk/flat/lift-times
+      PORT_OF_LONDON: https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists
+      TOWER_BRIDGE: https://www.towerbridge.org.uk/lift-times
       REDIS_ADDRESS: redis://redis:6379
       CB_MAX_FAILURES: 5
       CB_COOL_OFF: 60
@@ -60,8 +60,8 @@ All settings via environment variables. Defaults shown:
 | Variable                   | Default                                                         | Description                                    |
 |----------------------------|-----------------------------------------------------------------|------------------------------------------------|
 | `PORT`                     | `8080`                                                          | HTTP port for server                           |
-| `PORT_OF_LONDON`           | `https://pla.co.uk/pla-proxy/five-minute?url=ships/lists`       | Base URL for Port of London ship API           |
-| `TOWER_BRIDGE`             | `https://www.towerbridge.org.uk/flat/lift-times`                | URL for Tower Bridge lift times page           |
+| `PORT_OF_LONDON`           | `https://pla.co.uk/api-proxy/api?_api_proxy_uri=/ships/lists`   | Base URL for Port of London ship API           |
+| `TOWER_BRIDGE`             | `https://www.towerbridge.org.uk/lift-times`                     | URL for Tower Bridge lift times page           |
 | `REDIS_ADDRESS`            | `localhost:6379`                                                | Redis connection address                       |
 | `CB_MAX_FAILURES`          | `5`                                                             | Circuit-breaker max consecutive failures       |
 | `CB_COOL_OFF`              | `60`                                                            | Circuit-breaker open timeout (sec)             |
